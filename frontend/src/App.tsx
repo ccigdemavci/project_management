@@ -1,34 +1,35 @@
+// src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/login";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
-import ProjectDetail from "./pages/ProjectDetail"; 
+import ProjectDetail from "./pages/ProjectDetail";
 
-const MOCK_AUTH = import.meta.env.VITE_MOCK_AUTH === "true";
+const getToken = () => localStorage.getItem("trex_token");
 
 export default function App() {
+  const token = getToken();
   return (
     <Routes>
+      <Route path="/" element={<Navigate to={token ? "/dashboard" : "/login"} replace />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route
-        path="/"
+        path="/dashboard"
         element={
-          MOCK_AUTH ? (
+          <ProtectedRoute>
             <Dashboard />
-          ) : (
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          )
+          </ProtectedRoute>
         }
       />
-
-      <Route path="/login" element={<LoginPage />} />
-
-      {/* Proje detayı */}
-      <Route path="/project/:id" element={<ProjectDetail />} />
-
-      {/* bilinmeyen rota -> login */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route
+        path="/project/:id"
+        element={
+          <ProtectedRoute>
+            <ProjectDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

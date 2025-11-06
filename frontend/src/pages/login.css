@@ -1,0 +1,368 @@
+/* styles/pages/login.css */
+
+
+/* =========================================================
+   Trex Login — Emerald Theme • Elegant Layout
+   (yalnızca .center-page alanı içinde geçerlidir)
+========================================================= */
+
+.center-page {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: clamp(20px, 3vw, 36px);
+    /* yumuşak yeşil degrade + oval glowlar */
+    background: radial-gradient(1200px 550px at 8% -12%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%), radial-gradient(900px 520px at 110% 115%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 60%), var(--bg);
+}
+
+
+/* ------ Header (logo + ürün adı) ------ */
+
+.center-page .brand {
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.center-page .brand .logo-top {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(180deg, #ffffff, #f6fff9);
+    border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+    box-shadow: 0 18px 60px -30px var(--ring);
+}
+
+.center-page .brand .product {
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+
+.center-page .brand .tagline {
+    margin-top: -2px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+
+/* ------ Card ------ */
+
+.center-page .card {
+    width: min(560px, 94vw);
+    margin-top: 8px;
+    background: linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 88%, transparent));
+    border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+    border-radius: 20px;
+    padding: clamp(18px, 2.6vw, 22px) clamp(18px, 3vw, 24px);
+    box-shadow: 0 24px 80px -40px var(--ring), 0 1px 0 0 color-mix(in oklab, #fff 6%, transparent) inset;
+    text-align: left;
+}
+
+
+/* Oran: içeride nefes ve tipografi */
+
+.center-page .title {
+    font-size: clamp(20px, 2.2vw, 22px);
+    font-weight: 800;
+    margin: 2px 2px 6px;
+}
+
+.center-page .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 2px 16px;
+}
+
+
+/* ------ Form ------ */
+
+.center-page .form {
+    display: grid;
+    gap: 12px;
+}
+
+
+/* Etiket */
+
+.center-page .label {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 4px 0 6px;
+}
+
+
+/* Input alanı */
+
+.center-page .input {
+    height: 44px;
+    background: color-mix(in oklab, var(--card) 95%, transparent);
+    border: 1px solid color-mix(in oklab, var(--border) 90%, transparent);
+    border-radius: 14px;
+    padding: 10px 12px;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.center-page .input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px var(--ring);
+    outline: none;
+}
+
+
+/* Email + Şifre satırları arasında nefes */
+
+.center-page .field {
+    display: grid;
+    gap: 8px;
+}
+
+
+/* Şifre satırında sağda göz ikonu varsa: 
+   (JSX değiştirmiyorsan sorun değil; bu stil sadece mevcutsa devreye girer) */
+
+.center-page .input.has-icon {
+    padding-right: 42px;
+    position: relative;
+}
+
+.center-page .input-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: .75;
+}
+
+
+/* ------ Satır altı yardımcılar ------ */
+
+.center-page .row-sm {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+}
+
+.center-page .checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    user-select: none;
+}
+
+.center-page .link {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.center-page .link:hover {
+    text-decoration: underline;
+}
+
+
+/* ------ Buton ------ */
+
+.center-page .btn {
+    height: 46px;
+    margin-top: 8px;
+    justify-content: center;
+    font-weight: 700;
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--primary), var(--primary-600));
+    color: #fff;
+    border: none;
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, opacity .15s ease;
+}
+
+.center-page .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 32px -18px var(--ring);
+    filter: saturate(1.05);
+}
+
+.center-page .btn:disabled {
+    opacity: .65;
+    filter: grayscale(.15);
+}
+
+
+/* Hata mesajı */
+
+.center-page .error {
+    background: color-mix(in oklab, var(--danger) 12%, transparent);
+    border: 1px solid color-mix(in oklab, var(--danger) 30%, var(--border));
+    color: color-mix(in oklab, #fff 90%, var(--danger));
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+
+/* Alt link */
+
+.center-page .foot {
+    margin-top: 14px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.center-page .foot a {
+    color: var(--primary);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.center-page .foot a:hover {
+    text-decoration: underline;
+}
+
+
+/* Light mod dokunuşları */
+
+@media (prefers-color-scheme: light) {
+    .center-page .brand .logo-top {
+        background: #ffffff;
+        box-shadow: 0 18px 60px -36px rgba(16, 121, 56, .18);
+    }
+    .center-page .card {
+        box-shadow: 0 28px 80px -44px rgba(16, 121, 56, .20), 0 1px 0 0 rgba(255, 255, 255, .6) inset;
+    }
+}
+
+
+/* =====  A) Arka plan: Light = bembeyaz + köşelerde yeşil izler  ===== */
+
+:root[data-theme="light"] .center-page {
+    background: radial-gradient(900px 600px at -10% 0%, rgba(16, 185, 129, .07), transparent 60%), radial-gradient(1100px 700px at 110% 120%, rgba(16, 185, 129, .06), transparent 62%), #ffffff;
+    /* tam beyaz taban */
+}
+
+
+/* (Dark mod mevcut ayarlarınla kalsın) */
+
+
+/* =====  B) Brand alanını premium yap  ===== */
+
+.brand-pro {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #e6f4ed;
+    box-shadow: 0 12px 28px -16px rgba(16, 185, 129, .35);
+    display: grid;
+    place-items: center;
+}
+
+.brand-mark img {
+    width: 24px;
+    height: 24px;
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.brand-name {
+    font-weight: 900;
+    letter-spacing: .2px;
+    font-size: 20px;
+}
+
+.brand-sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.brand-sep {
+    width: min(560px, 92vw);
+    height: 1px;
+    margin: 6px auto 8px;
+    background: color-mix(in oklab, var(--border) 65%, transparent);
+    border-radius: 999px;
+}
+
+
+/* Kart biraz daha zarif dursun */
+
+.center-page .card {
+    border-radius: 20px;
+    border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+    background: linear-gradient(180deg, color-mix(in oklab, var(--card) 98%, transparent), color-mix(in oklab, var(--card) 92%, transparent));
+}
+
+
+/* =====  C) Şifre göz butonu: kutusuz, minimalist  ===== */
+
+.center-page .input.has-icon {
+    padding-right: 44px;
+    position: relative;
+}
+
+.center-page .input-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: none;
+    background: transparent;
+    opacity: .6;
+    cursor: pointer;
+}
+
+.center-page .input-icon:hover {
+    opacity: .9;
+}
+
+
+/* =====  D) Light mod buton kontrastı: metin SİYAH  ===== */
+
+:root[data-theme="light"] .center-page .btn {
+    color: #0f172a;
+    /* siyahımsı koyu metin */
+    background: linear-gradient(180deg, #d7f4e6, #b9ecd5);
+    border: 1px solid #bfe9d6;
+}
+
+:root[data-theme="light"] .center-page .btn:hover {
+    box-shadow: 0 18px 36px -18px rgba(16, 185, 129, .25);
+}
+
+
+/* Disabled halinde de okunaklı kalsın */
+
+.center-page .btn:disabled {
+    opacity: .6;
+    filter: grayscale(.1);
+}
+
+
+/* Form inputları light’ta daha beyaz dursun */
+
+:root[data-theme="light"] .center-page .input {
+    background: #fff;
+    border: 1px solid #e7efe9;
+}

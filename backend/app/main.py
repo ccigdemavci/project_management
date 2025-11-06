@@ -1,24 +1,39 @@
-# app/main.py
+# backend/app/main.py
+from pathlib import Path
+from dotenv import load_dotenv
+import os
 
-# FastAPI ana framework ve CORS (Cross-Origin Resource Sharing) middleware'i import edilir
+# backend/.env dosyasını yükle
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+print("APP DEBUG: DATABASE_URL =", os.getenv("DATABASE_URL"))
+
+
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
-# Projeye ait router (yani endpoint grupları) modülleri import edilir
-from .routers import auth, projects, project_members, project_notes, project_phases, project_files, project_budget
+# Router modülleri (her biri .router nesnesi içerir)
+from .routers import (
+    auth,
+    projects,
+    project_members,
+    project_notes,
+    project_phases,
+    project_tasks,
+    project_files,
+    project_budget,
+    debug_db,   # <— debug DB uçları
+)
 
-# Veritabanı modelleri ve bağlantı motoru içe aktarılır
+# SQLAlchemy Base ve engine
 from .db import Base, engine
-from .routers import auth, projects, project_members, project_notes, project_phases, project_tasks
-# FastAPI uygulaması başlatılır
-# title: API’nin ismi, version: sürüm numarası
+
+# FastAPI uygulaması
 app = FastAPI(title="TrexProject API", version="0.1")
 
-# -----------------------------
-# ROUTER EKLEME
-# -----------------------------
-# Router'lar, farklı API uç noktalarını (örneğin /auth, /projects, /notes vb.) modüler halde yönetir.
-# Her router sadece bir kez eklenmelidir. Bu sayede modüler, temiz bir yapı elde edilir.
+# Router'ları tek seferde ekle
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(project_members.router)
@@ -27,33 +42,25 @@ app.include_router(project_phases.router)
 app.include_router(project_tasks.router)
 app.include_router(project_files.router)
 app.include_router(project_budget.router)
-# -----------------------------
-# CORS (Cross-Origin Resource Sharing) AYARLARI
-# -----------------------------
-# API'nin başka domainlerden (örneğin frontend'in localhost:3000'den) erişilebilmesini sağlar.
-# allow_origins=["*"] → Tüm kaynaklardan gelen isteklere izin verir.
+app.include_router(debug_db.router)  # <— eklendi
+
+# CORS (frontend için gerekli)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],         # Herhangi bir kaynaktan erişime izin ver
-    allow_credentials=True,      # Kimlik doğrulama bilgilerini (cookies, auth headers) destekler
-    allow_methods=["*"],         # Tüm HTTP metodlarına (GET, POST, PUT, DELETE vb.) izin ver
-    allow_headers=["*"],         # Tüm header’lara izin ver
+    allow_origins=["*"],        # ihtiyaca göre domain kısıtlayabilirsin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# -----------------------------
-# UYGULAMA BAŞLATILDIĞINDA ÇALIŞAN FONKSİYON
-# -----------------------------
-# Bu event uygulama ayağa kalktığında (startup) tetiklenir.
-# Base.metadata.create_all() → SQLAlchemy kullanılarak veritabanındaki tablolar oluşturulur.
+# Uygulama başlatıldığında tablo oluştur (opsiyonel; Alembic kullanıyorsan kaldır)
 @app.on_event("startup")
 def on_startup():
+    # Hangi DB'ye bağlandığını logla (teşhis için)
+    print("APP DEBUG: DATABASE_URL =", os.getenv("DATABASE_URL"))
     Base.metadata.create_all(bind=engine)
 
-# -----------------------------
-# SAĞLIK KONTROLÜ (HEALTH CHECK)
-# -----------------------------
-# API’nin çalışır durumda olup olmadığını test etmek için basit bir endpoint.
-# Tarayıcıdan /health adresine gidildiğinde {"status": "ok"} döner.
+# Basit sağlık kontrolü
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

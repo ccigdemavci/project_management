@@ -1,0 +1,38 @@
+/* Status pills */
+
+.pill {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid transparent;
+}
+
+.pill.planning {
+    background: #16202e;
+    color: #7fb2ff;
+    border-color: #1e2c40;
+}
+
+.pill.active {
+    background: #14251c;
+    color: #8de1b8;
+    border-color: #1a2f24;
+}
+
+.pill.risk {
+    background: #2d1619;
+    color: #ff9aa6;
+    border-color: #472127;
+}
+
+.pill.hold {
+    background: #2a2315;
+    color: #f7d08a;
+    border-color: #3a2e18;
+}
+
+.pill.done {
+    background: #16221d;
+    color: #a6f3d5;
+    border-color: #1a2c24;
+}

@@ -1,0 +1,40 @@
+/* styles/tokens.css */
+
+
+/* Dark (default) */
+
+:root {
+    --bg: #0b0f0c;
+    --card: #101612;
+    --muted: #9ab2a2;
+    --text: #ecf5ef;
+    /* Emerald primary */
+    --primary: #22c55e;
+    /* emerald-500 */
+    --primary-600: #16a34a;
+    /* emerald-600 */
+    --accent: #86efac;
+    /* mint glow */
+    --danger: #ef4444;
+    --border: #1a2420;
+    --ring: color-mix(in oklab, var(--primary) 35%, transparent);
+}
+
+
+/* Light */
+
+:root[data-theme="light"] {
+    --bg: #f5faf7;
+    --card: #ffffff;
+    --muted: #5d6f63;
+    --text: #0b1a12;
+    --primary: #16a34a;
+    /* emerald-600 */
+    --primary-600: #15803d;
+    /* emerald-700 */
+    --accent: #10b981;
+    /* emerald-500 */
+    --danger: #dc2626;
+    --border: #e5efe8;
+    --ring: color-mix(in oklab, var(--primary) 22%, transparent);
+}

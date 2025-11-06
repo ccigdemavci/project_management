@@ -14,43 +14,71 @@ from app.db import get_db
 from app.models import User
 
 # Swagger "Authorize" butonu bu endpointten token alacak
-# NOT: router'da /auth altında login varsa bu doğru: "/auth/login"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Hem pbkdf2_sha256 hem bcrypt hash'lerini destekle
+# bcrypt'i varsayılan yap; pbkdf2'yi doğrulamada kabul et
 pwd_context = CryptContext(
-    schemes=["pbkdf2_sha256", "bcrypt"],
+    schemes=["bcrypt", "pbkdf2_sha256"],
     deprecated="auto",
 )
+
+print("AUTH LOADED:", __file__, "schemes=", ["bcrypt", "pbkdf2_sha256"])
 
 # -----------------------------
 # Parola yardımcıları
 # -----------------------------
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
     """Kullanıcının girdiği parolayı, DB'deki hash ile doğrular."""
+    if not hashed_password:
+        return False
     try:
         return pwd_context.verify(plain_password, hashed_password)
     except Exception:
         # Hash formatı bozuksa/bilinmiyorsa False dön
         return False
 
+
 def hash_password(password: str) -> str:
-    """
-    Yeni kullanıcı/parola güncellemede hash üretmek için.
-    (routers/auth.py bu ismi bekliyor)
-    """
+    """Yeni kullanıcı/parola güncellemede hash üretmek için."""
     return pwd_context.hash(password)
 
+
+# Bazı yerlerde get_password_hash ismi beklenebilir; uyumluluk için alias bırakıyoruz.
+get_password_hash = hash_password
+
+# -----------------------------
+# Kimlik doğrulama
+# -----------------------------
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    """E-posta + parola ile kullanıcı doğrulama."""
+    # DEBUG: gerekirse bırak, üretimde yorum satırı yapabilirsin
+    print(f"AUTH DEBUG: lookup email -> {email}")
+
     user = db.query(User).filter(User.email == email).first()
+    print("AUTH DEBUG: user found?", bool(user))
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+
+    ok = verify_password(password, user.password_hash)
+    print("AUTH DEBUG: verify password =", ok, "| hash prefix =", (user.password_hash or "")[:7])
+    if not ok:
         return None
-    # Eğer şemada is_active yoksa sorun çıkarmaz; varsa ve 0 ise engelle:
-    if hasattr(user, "is_active") and user.is_active == 0:
+
+    # Eski hash'leri girişte otomatik bcrypt'e yükselt (opsiyonel)
+    try:
+        if pwd_context.needs_update(user.password_hash):
+            user.password_hash = hash_password(password)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            print("AUTH DEBUG: password hash migrated to bcrypt")
+    except Exception:
+        # migrasyon başarısız olursa login'i engelleme
+        pass
+
+    # Şemanda is_active yoksa sorun değil; varsa kontrol et
+    if hasattr(user, "is_active") and getattr(user, "is_active") in (0, False):
         return None
+
     return user
 
 # -----------------------------
@@ -63,16 +91,12 @@ def create_access_token(
     """
     Hem create_access_token({"sub": ...}) hem create_access_token("...") formatını destekler.
     """
-    if isinstance(sub_or_payload, dict):
-        payload = dict(sub_or_payload)  # kopya
-    else:
-        payload = {"sub": str(sub_or_payload)}
+    payload = dict(sub_or_payload) if isinstance(sub_or_payload, dict) else {"sub": str(sub_or_payload)}
 
-    # settings'ten oku; yoksa default 1440 dk (1 gün)
     exp_minutes = (
         expires_minutes
         if expires_minutes is not None
-        else getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)
+        else getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)  # varsayılan 1 gün
     )
     expire = datetime.now(timezone.utc) + timedelta(minutes=exp_minutes)
     payload["exp"] = expire
@@ -112,19 +136,19 @@ def get_current_user(
     # Önce e-posta gibi dene
     user = db.query(User).filter(User.email == subject).first()
     if not user:
-        # id gibi dene (SQLAlchemy 2.0: db.get(Model, pk))
+        # id gibi dene
         try:
             uid = int(subject)
         except (ValueError, TypeError):
             uid = None
         if uid is not None:
-            user = db.get(User, uid)  # .query(...).get() yerine
+            user = db.get(User, uid)
 
     if not user:
         raise credentials_exc
 
     # Eğer is_active sütunu varsa ve false ise 401 ver
-    if hasattr(user, "is_active") and user.is_active == 0:
+    if hasattr(user, "is_active") and getattr(user, "is_active") in (0, False):
         raise credentials_exc
 
     return user

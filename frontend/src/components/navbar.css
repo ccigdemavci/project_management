@@ -1,0 +1,68 @@
+.nv {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    border-radius: 16px;
+    background: color-mix(in oklab, var(--bg) 85%, transparent);
+    backdrop-filter: blur(8px) saturate(1.1);
+    border: 1px solid var(--border);
+}
+
+.nv-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nv-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.nv-title {
+    font-weight: 700;
+    letter-spacing: .2px;
+}
+
+.nv-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nv-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.nv-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #223;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+:root[data-theme="light"] .nv-avatar {
+    background: #eef3fb;
+    color: #223;
+}
+
+.nv-name {
+    font-size: 14px;
+    color: var(--muted);
+}

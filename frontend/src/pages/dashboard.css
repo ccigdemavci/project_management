@@ -1,0 +1,5 @@
+/* Example: Add a property or remove the rule set if not needed */
+
+.hero .kpi {
+    display: flex;
+}

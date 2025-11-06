@@ -1,0 +1,54 @@
+/* Hero & KPIs */
+
+.hero {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    margin: 10px 2px 14px;
+}
+
+.hero-title {
+    margin: 0 0 4px;
+    font-size: 28px;
+    text-align: left;
+}
+
+.hero-sub {
+    margin: 0;
+    color: var(--muted);
+    text-align: left;
+}
+
+.hero-kpis {
+    display: flex;
+    gap: 10px;
+}
+
+.kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 14px;
+    min-width: 100px;
+    transition: transform .16s, box-shadow .16s;
+    box-shadow: 0 10px 28px -22px rgba(0, 0, 0, .55);
+}
+
+:root[data-theme="light"] .kpi {
+    box-shadow: 0 12px 28px -24px rgba(0, 0, 0, .18);
+}
+
+.kpi:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 36px -28px var(--ring);
+}
+
+.kpi-h {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.kpi-v {
+    font-size: 20px;
+    font-weight: 700;
+}
