@@ -40,6 +40,13 @@ class ProjectStatus(str, enum.Enum):
     closed = "Closed"
 
 
+class ProjectPriority(str, enum.Enum):
+    """Proje öncelik seviyeleri."""
+    High = "High"       # Önemli
+    Medium = "Medium"   # Orta
+    Normal = "Normal"   # Normal
+
+
 class ProjectMemberRole(str, enum.Enum):
     """Projedeki kullanıcı rolü."""
     owner = "owner"          # Proje sahibi
@@ -124,6 +131,8 @@ class Project(Base):
     title: Mapped[str] = mapped_column(String(200), index=True)  # Proje başlığı
     status: Mapped[ProjectStatus] = mapped_column(SAEnum(ProjectStatus), default=ProjectStatus.planning)
     progress: Mapped[int] = mapped_column(Integer, default=0)  # Proje ilerleme yüzdesi (0–100)
+
+    priority: Mapped[ProjectPriority] = mapped_column(SAEnum(ProjectPriority), default=ProjectPriority.Normal)
 
     # İlişkiler ve yabancı anahtarlar
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
@@ -232,6 +241,12 @@ class ProjectPhase(Base):
 
     # İlişki
     project: Mapped["Project"] = relationship("Project", back_populates="phases")
+    details: Mapped[list["PhaseDetail"]] = relationship(
+        "PhaseDetail", 
+        back_populates="phase",
+        cascade="all, delete-orphan",
+        order_by="PhaseDetail.sort_order"
+    )
     
     
     # ---------- PHASE TASK (görev/alt başlık) ----------
@@ -295,9 +310,83 @@ class ProjectFile(Base):
 # Project içine ilişki ekle (tek bir Project sınıfın var, o class’ın içine):
 # files = relationship("ProjectFile", back_populates="project", cascade="all, delete-orphan")
 
+class PhaseDetail(Base):
+    """Stores sub-items/details for each project phase."""
+    __tablename__ = "phase_details"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phase_id: Mapped[int] = mapped_column(
+        ForeignKey("project_phases.id", ondelete="CASCADE"), 
+        nullable=False,
+        index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_completed: Mapped[bool] = mapped_column(default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    
+    # New detailed fields
+    scope: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    responsible: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    effort: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    unit: Mapped[str] = mapped_column(String(20), default="Saat")
+    
+    # Gantt dates
+    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Priority
+    priority: Mapped[str] = mapped_column(String(20), default="Normal")
+    
+    # Completion Time
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    phase: Mapped["ProjectPhase"] = relationship("ProjectPhase", back_populates="details")
+    
+    # Recursive relationship
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("phase_details.id", ondelete="CASCADE"), nullable=True)
+    item_type: Mapped[str] = mapped_column(String(20), default="task") # "task" or "sub_phase"
+    
+    children: Mapped[list["PhaseDetail"]] = relationship(
+        "PhaseDetail",
+        back_populates="parent",
+        cascade="all, delete-orphan"
+    )
+    
+    parent: Mapped[Optional["PhaseDetail"]] = relationship(
+        "PhaseDetail",
+        remote_side="PhaseDetail.id",
+        back_populates="children"
+    )
+    
+    notes: Mapped[list["PhaseDetailNote"]] = relationship(
+        "PhaseDetailNote",
+        back_populates="detail",
+        cascade="all, delete-orphan"
+    )
+
+class PhaseDetailNote(Base):
+    __tablename__ = "phase_detail_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    detail_id: Mapped[int] = mapped_column(
+        ForeignKey("phase_details.id", ondelete="CASCADE"), 
+        nullable=False,
+        index=True
+    )
+    user: Mapped[str] = mapped_column(String(100), nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    detail: Mapped["PhaseDetail"] = relationship("PhaseDetail", back_populates="notes")
+
 class ProjectExpense(Base):
     __tablename__ = "project_expenses"
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

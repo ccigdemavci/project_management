@@ -32,6 +32,7 @@ class Token(BaseModel):
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     status: Optional[str] = "Planning"      # "Idea" | "Planning" | "Executing" | "Monitoring" | "Closed"
+    priority: Optional[str] = "Normal"      # "High" | "Medium" | "Normal"
     progress: Optional[int] = Field(default=0, ge=0, le=100)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -40,6 +41,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3, max_length=200)
     status: Optional[str] = None
+    priority: Optional[str] = None
     progress: Optional[int] = Field(default=None, ge=0, le=100)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -48,11 +50,13 @@ class ProjectOut(BaseModel):
     id: int
     title: str
     status: str
+    priority: str
     progress: int
     owner_id: Optional[int]
     start_date: Optional[datetime]
     end_date: Optional[datetime]
     created_at: datetime
+    team_size: int = 0
     class Config:
         from_attributes = True
 
@@ -139,14 +143,14 @@ class ProjectSummaryOut(BaseModel):
 # ======================
 class ProjectPhaseCreate(BaseModel):
     name: str
-    order: Optional[int] = None
+    sort_order: Optional[int] = None
     status: Optional[Literal["not_started", "in_progress", "blocked", "done"]] = "not_started"
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
 
 class ProjectPhaseUpdate(BaseModel):
     name: Optional[str] = None
-    order: Optional[int] = None
+    sort_order: Optional[int] = None
     status: Optional[Literal["not_started", "in_progress", "blocked", "done"]] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -155,7 +159,7 @@ class ProjectPhaseOut(BaseModel):
     id: int
     project_id: int
     name: str
-    order: int
+    sort_order: int
     status: Literal["not_started", "in_progress", "blocked", "done"]
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -165,6 +169,74 @@ class ProjectPhaseOut(BaseModel):
 
 class ReorderPhasesIn(BaseModel):
     ordered_ids: List[int]
+
+
+# ======================
+# PHASE DETAILS (phase altındaki detaylar)
+# ======================
+class PhaseDetailBase(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = None
+    is_completed: bool = False
+    sort_order: Optional[int] = 0
+    parent_id: Optional[int] = None
+    item_type: Optional[str] = "task"
+    
+    # New detailed fields
+    scope: Optional[str] = None
+    reference: Optional[str] = None
+    responsible: Optional[str] = None
+    effort: Optional[float] = None
+    unit: Optional[str] = "Saat"
+    
+    # Gantt dates
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    
+    # Gantt dates
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    
+    priority: Optional[str] = "Normal"
+    completed_at: Optional[datetime] = None
+
+class PhaseDetailCreate(PhaseDetailBase):
+    phase_id: int
+
+class PhaseDetailUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    is_completed: Optional[bool] = None
+    sort_order: Optional[int] = None
+    parent_id: Optional[int] = None
+    item_type: Optional[str] = None
+    
+    # New detailed fields
+    scope: Optional[str] = None
+    reference: Optional[str] = None
+    responsible: Optional[str] = None
+    effort: Optional[float] = None
+    unit: Optional[str] = None
+    
+    # Gantt dates
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    
+    priority: Optional[str] = None
+
+class PhaseDetail(PhaseDetailBase):
+    id: int
+    phase_id: int
+    created_at: datetime
+    updated_at: datetime
+    children: List['PhaseDetail'] = []
+
+    class Config:
+        from_attributes = True
+
+# Resolve forward reference
+PhaseDetail.model_rebuild()
+
 
 
 # ======================
@@ -247,3 +319,22 @@ class BudgetSummaryOut(BaseModel):
     spent_amount: Decimal
     remaining: Decimal
     percent_used: float
+
+# ======================
+# NOTES
+# ======================
+class PhaseDetailNoteBase(BaseModel):
+    note: str
+
+class PhaseDetailNoteCreate(PhaseDetailNoteBase):
+    detail_id: int
+    user: str
+
+class PhaseDetailNoteOut(PhaseDetailNoteBase):
+    id: int
+    detail_id: int
+    user: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

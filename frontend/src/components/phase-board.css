@@ -1,0 +1,119 @@
+.phase-board {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.phase-rail {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: nowrap;
+    background: #f6f7ff;
+    padding: 10px 14px;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4);
+    overflow-x: auto;
+}
+
+.rail-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+    white-space: nowrap;
+}
+
+.rail-chip .rail-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #4ad5c3, #7b81ff);
+}
+
+.rail-chip .rail-label {
+    font-weight: 700;
+    color: #2f3e46;
+}
+
+.rail-chip.active {
+    background: #f0edff;
+    border-color: #d6ccff;
+    box-shadow: 0 10px 26px -24px rgba(0, 0, 0, .35);
+}
+
+.rail-chip:hover {
+    transform: translateY(-1px);
+}
+
+.rail-add {
+    border: 1px dashed #cbd5e1;
+    padding-right: 10px;
+    padding-left: 10px;
+    min-width: 220px;
+    gap: 8px;
+}
+
+.rail-add input {
+    flex: 1;
+}
+
+.phase-body {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px;
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+}
+
+.phase-body-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.phase-body .phase-name {
+    font-weight: 800;
+}
+
+.phase-body .phase-meta {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.task-add {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.task-list {
+    list-style: none;
+    padding: 10px 0 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.task-item .bullet {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--primary);
+}

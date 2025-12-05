@@ -1,4 +1,8 @@
 /* Project Detail */
+.page-detail {
+    margin-top: 40px;
+    padding-bottom: 40px;
+}
 
 .pd-head {
     display: grid;
@@ -305,4 +309,520 @@
 
 .table-r {
     border-bottom: 1px dashed var(--border);
+}
+
+/* Team Section Specifics */
+.team-owner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.avatar.owner {
+    background: var(--primary);
+    color: white;
+}
+
+.divider {
+    height: 1px;
+    background: var(--border);
+    margin: 16px 0;
+    opacity: 0.5;
+}
+
+.team-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.team-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    transition: background 0.2s;
+}
+
+.team-item:hover {
+    background: var(--hover);
+}
+
+.empty-sm {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    padding: 10px;
+    font-style: italic;
+}
+
+.add-member-form .fi {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+}
+
+.spinner-sm {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Phase Editor (Stepper Layout) */
+.phase-editor-container {
+    margin-bottom: 24px;
+}
+
+/* 1. Stepper Scroll Container */
+.pe-stepper-scroll {
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.pe-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-width: max-content;
+}
+
+/* Step Item */
+.pe-step {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 99px;
+    background: transparent;
+    opacity: 0.6;
+}
+
+.pe-step:hover {
+    background: var(--hover);
+    opacity: 0.8;
+}
+
+.pe-step.selected {
+    background: var(--card);
+    border: 1px solid var(--border);
+    opacity: 1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Dot */
+.pe-step-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--muted);
+    display: grid;
+    place-items: center;
+}
+
+.pe-step.selected .pe-step-dot {
+    background: var(--primary);
+}
+
+.pe-step-dot-inner {
+    width: 6px;
+    height: 6px;
+    background: white;
+    border-radius: 50%;
+}
+
+/* Label */
+.pe-step-label {
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Connecting Line */
+.pe-step-line {
+    width: 32px;
+    height: 2px;
+    background: var(--border);
+    margin-left: 12px;
+    margin-right: -4px;
+}
+
+/* Add Button */
+.pe-add-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px dashed var(--border);
+    background: transparent;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: var(--muted);
+    margin-left: 8px;
+    transition: all 0.2s;
+}
+
+.pe-add-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--primary);
+}
+
+/* 2. Detail Card */
+.pe-detail-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.pe-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.pe-dh-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.pe-title-input {
+    font-size: 18px;
+    font-weight: 700;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    width: 100%;
+}
+
+.pe-title-input:focus {
+    text-decoration: underline;
+    text-decoration-color: var(--primary);
+}
+
+.pe-dates {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.pe-dates input {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 6px;
+    color: var(--text);
+    font-size: 12px;
+}
+
+.pe-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+}
+
+.pe-items-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pe-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.pe-item-row:hover {
+    border-color: var(--border);
+}
+
+.pe-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    flex: 1;
+}
+
+.pe-checkbox span.done {
+    text-decoration: line-through;
+    color: var(--muted);
+}
+
+.pe-add-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.pe-empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-style: italic;
+    background: var(--card);
+    border-radius: 16px;
+    border: 1px dashed var(--border);
+}
+
+/* Phase Colors in Stepper */
+.pe-step.ph-discovery .pe-step-dot {
+    background: #57c7ff;
+}
+
+.pe-step.ph-design .pe-step-dot {
+    background: #947dff;
+}
+
+.pe-step.ph-dev .pe-step-dot {
+    background: #55d4a7;
+}
+
+.pe-step.ph-test .pe-step-dot {
+    background: #ffcc66;
+}
+
+.pe-step.selected.ph-discovery {
+    border-color: #57c7ff;
+    background: rgba(87, 199, 255, 0.1);
+}
+
+.pe-step.selected.ph-design {
+    border-color: #947dff;
+    background: rgba(148, 125, 255, 0.1);
+}
+
+.pe-step.selected.ph-dev {
+    border-color: #55d4a7;
+    background: rgba(85, 212, 167, 0.1);
+}
+
+.pe-step.selected.ph-test {
+    border-color: #ffcc66;
+    background: rgba(255, 204, 102, 0.1);
+}
+
+/* Step Content & Progress */
+.pe-step-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pe-step-progress-bg {
+    width: 100%;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 40px;
+}
+
+.pe-step-progress-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* Phase Detail Progress */
+.pe-phase-progress {
+    margin-top: 12px;
+    background: var(--bg);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.pe-pp-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+.pe-pp-bg {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pe-pp-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #55d4a7);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* Nested Phase Items */
+.pe-node {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.pe-node-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    margin-bottom: 4px;
+}
+
+.pe-node-row:hover {
+    border-color: var(--border);
+    background: var(--hover);
+}
+
+.pe-node-row:hover .pe-node-actions {
+    opacity: 1;
+}
+
+.pe-node-folder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.pe-node-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.pe-node-children {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 20px;
+    /* Indentation for children */
+    border-left: 1px solid var(--border);
+    /* Optional: visual guide line */
+    margin-left: 10px;
+    margin-bottom: 8px;
+}
+
+.pe-add-sub-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Mini Gantt */
+.gant {
+    position: relative;
+    width: 100%;
+    height: 40px;
+    background: var(--bg);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+
+.gant-block {
+    position: absolute;
+    height: 24px;
+    background: var(--primary);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.gant-block.ph-discovery {
+    background: #57c7ff;
+}
+
+.gant-block.ph-design {
+    background: #947dff;
+}
+
+.gant-block.ph-dev {
+    background: #55d4a7;
+}
+
+.gant-block.ph-test {
+    background: #ffcc66;
+    color: #111;
+}
+
+.gant-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

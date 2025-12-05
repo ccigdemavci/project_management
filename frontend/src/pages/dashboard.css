@@ -1,5 +1,42 @@
-/* Example: Add a property or remove the rule set if not needed */
+/* Dashboard yenileme */
 
-.hero .kpi {
+.page-dashboard {
+    background: var(--bg);
+    min-height: 100vh;
+    padding-bottom: 40px;
+    margin-top: 40px;
+}
+
+.page-dashboard .hero {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--accent) 4%, transparent));
+    padding: 40px;
+    border-radius: 32px;
+    border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+    box-shadow: none;
+    margin-bottom: 40px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.page-dashboard .hero .kpi {
     display: flex;
+}
+
+.page-dashboard .list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px;
+    color: var(--muted);
+    background: var(--card);
+    border-radius: 16px;
+    border: 1px dashed var(--border);
 }

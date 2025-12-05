@@ -1,21 +1,19 @@
 .input {
     width: 100%;
-    background: #10151c;
+    background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 10px 12px;
-    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-}
-
-:root[data-theme="light"] .input {
-    background: #fff;
+    font-size: 14px;
+    transition: all 0.2s ease;
 }
 
 .input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--ring);
+    background: var(--bg);
+    box-shadow: 0 0 0 4px var(--ring);
 }
 
 .f-label {

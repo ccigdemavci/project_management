@@ -10,7 +10,7 @@ from ..db import get_db
 from ..core.auth import get_current_user
 
 # Veritabanı modelleri
-from ..models import Project, ProjectMember, User
+from ..models import Project, ProjectMember, ProjectMemberRole, User
 
 # Girdi/çıktı için Pydantic şemaları
 from ..schemas import ProjectMemberIn, ProjectMemberOut
@@ -71,8 +71,8 @@ def _to_member_out(db: Session, m: ProjectMember) -> ProjectMemberOut:
         id=m.id,
         project_id=m.project_id,
         user_id=m.user_id,
-        role=m.role,
-        created_at=m.created_at,
+        role_in_project=m.role.value if hasattr(m.role, "value") else str(m.role),
+        joined_at=m.created_at,
         user_name=u.name if u else None,
         user_email=u.email if u else None,
     )
@@ -105,11 +105,22 @@ def add_member(
     if exists:
         raise HTTPException(status_code=409, detail="User already a member")
 
+    # role map: UI'dan gelen "member" → contributor, diğerleri enum'a uyduruluyor
+    incoming_role = (data.role_in_project or "member").lower()
+    role_map = {
+        "member": ProjectMemberRole.contributor,
+        "contributor": ProjectMemberRole.contributor,
+        "viewer": ProjectMemberRole.viewer,
+        "manager": ProjectMemberRole.manager,
+        "owner": ProjectMemberRole.owner,
+    }
+    role_value = role_map.get(incoming_role, ProjectMemberRole.contributor)
+
     # 3️⃣ Yeni üye oluştur
     member = ProjectMember(
         project_id=pid,
         user_id=data.user_id,
-        role=(data.role or "member"),  # Varsayılan rol member
+        role=role_value,  # Varsayılan: contributor
     )
 
     # 4️⃣ Veritabanına ekle

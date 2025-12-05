@@ -29,6 +29,22 @@ button {
     color: #fff;
 }
 
+:root[data-theme="light"] .btn.primary {
+    background: linear-gradient(180deg, #7ee0a6, #4acb8b);
+    color: #0b1a12;
+    border-color: #3bbc7c;
+}
+
+.btn.soft {
+    background: color-mix(in oklab, var(--primary) 14%, var(--card));
+    border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+    color: #d6e7ff;
+}
+
+:root[data-theme="light"] .btn.soft {
+    color: var(--text);
+}
+
 .btn.ghost {
     background: #141922;
 }

@@ -21,6 +21,7 @@ from .routers import (
     project_members,
     project_notes,
     project_phases,
+    phase_details,
     project_tasks,
     project_files,
     project_budget,
@@ -39,6 +40,7 @@ app.include_router(projects.router)
 app.include_router(project_members.router)
 app.include_router(project_notes.router)
 app.include_router(project_phases.router)
+app.include_router(phase_details.router)
 app.include_router(project_tasks.router)
 app.include_router(project_files.router)
 app.include_router(project_budget.router)

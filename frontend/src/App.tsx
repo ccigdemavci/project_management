@@ -4,6 +4,7 @@ import LoginPage from "./pages/login";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProjectDetail from "./pages/ProjectDetail";
+import ProjectFullPlan from "./pages/ProjectFullPlan";
 
 const getToken = () => localStorage.getItem("trex_token");
 
@@ -26,6 +27,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ProjectDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/project/:id/plan"
+        element={
+          <ProtectedRoute>
+            <ProjectFullPlan />
           </ProtectedRoute>
         }
       />

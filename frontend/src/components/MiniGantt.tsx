@@ -3,6 +3,7 @@ export type Phase = {
   start: string; // ISO
   end: string;   // ISO
   cls?: string;  // renk sınıfı
+  status?: string; // "done" | "active" | ...
 };
 
 type Props = {
@@ -23,14 +24,23 @@ export default function MiniGantt({ phases }: Props) {
       {phases.map((p, i) => {
         const left = ((toNum(p.start) - min) / span) * 100;
         const width = ((toNum(p.end) - toNum(p.start)) / span) * 100;
+        const isDone = p.status === "done";
+
         return (
           <div
             key={i}
-            className={`gant-block ${p.cls ?? ""}`}
-            style={{ left: `${left}%`, width: `${Math.max(width, 2)}%` }}
-            title={`${p.name}`}
+            className={`gant-block ${p.cls ?? ""} ${isDone ? "done" : ""}`}
+            style={{
+              left: `${left}%`,
+              width: `${Math.max(width, 2)}%`,
+              opacity: isDone ? 0.6 : 1,
+              filter: isDone ? "grayscale(0.5)" : "none"
+            }}
+            title={`${p.name} ${isDone ? "(Tamamlandı)" : ""}`}
           >
-            <span className="gant-label">{p.name}</span>
+            <span className="gant-label">
+              {p.name} {isDone && "✓"}
+            </span>
           </div>
         );
       })}

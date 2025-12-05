@@ -1,40 +1,80 @@
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, .45);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 50;
+    animation: fadeIn 0.2s ease-out;
 }
 
 .modal {
     width: 520px;
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+    color: var(--text);
 }
 
 .modal-h {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--text) 2%, transparent);
 }
 
 .modal-title {
-    font-weight: 700;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+}
+
+.modal-subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 400;
 }
 
 .modal-b {
-    padding: 14px;
+    padding: 24px;
 }
 
 .modal-f {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    padding: 12px 14px;
+    gap: 12px;
+    padding: 16px 24px;
+    background: color-mix(in srgb, var(--bg) 50%, transparent);
     border-top: 1px solid var(--border);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }

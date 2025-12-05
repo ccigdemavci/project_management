@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/trex-logo.png";
 import { login } from "@/lib/auth";
+import { Eye, EyeOff, Lock, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
 
 export default function Login() {
   const nav = useNavigate();
@@ -18,9 +19,8 @@ export default function Login() {
     setError(null);
     try {
       await login(email, password, remember);
-      nav("/", { replace: true }); // başarıyla dashboard’a
+      nav("/", { replace: true });
     } catch (err: any) {
-      // FastAPI genelde {"detail":"Invalid credentials"} döner
       const msg = err?.message || "Giriş başarısız.";
       setError(msg);
     } finally {
@@ -29,78 +29,267 @@ export default function Login() {
   };
 
   return (
-    <div className="center-page">
-      {/* brand-pro bloğu (senin son halin) */}
-      <header className="brand-pro" aria-label="Trex ürün kimliği">
-        <span className="brand-mark"><span className="mark-glass"><img src={logo} alt="" /></span></span>
-        <div className="brand-text">
-          <div className="brand-name">Trex</div>
-          <div className="brand-sub">Project &amp; Operations Console</div>
+    <div style={{
+      minHeight: "100vh",
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "var(--bg)",
+      position: "relative",
+      overflow: "hidden",
+      fontFamily: "'Inter', sans-serif"
+    }}>
+      {/* Decorative Background Elements */}
+      <div style={{
+        position: "absolute",
+        top: "-10%",
+        left: "-10%",
+        width: "50%",
+        height: "50%",
+        background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)",
+        filter: "blur(120px)",
+        opacity: 0.15,
+        borderRadius: "50%"
+      }} />
+      <div style={{
+        position: "absolute",
+        bottom: "-10%",
+        right: "-10%",
+        width: "50%",
+        height: "50%",
+        background: "radial-gradient(circle, var(--accent) 0%, transparent 70%)",
+        filter: "blur(120px)",
+        opacity: 0.1,
+        borderRadius: "50%"
+      }} />
+
+      <div style={{
+        width: "100%",
+        maxWidth: "420px",
+        background: "var(--card)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderRadius: "24px",
+        border: "1px solid var(--border)",
+        boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--border) inset",
+        padding: "40px",
+        position: "relative",
+        zIndex: 10,
+        margin: "20px"
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+          <img
+            src={logo}
+            alt="Trex Logo"
+            style={{
+              width: "180px",
+              height: "auto",
+              objectFit: "contain",
+              margin: "0 auto 16px",
+              display: "block",
+              filter: "drop-shadow(0 4px 12px rgba(34, 197, 94, 0.15))"
+            }}
+          />
+          <h1 style={{
+            fontSize: "24px",
+            fontWeight: "700",
+            color: "var(--text)",
+            marginBottom: "8px",
+            letterSpacing: "-0.5px"
+          }}>
+            Tekrar Hoşgeldiniz
+          </h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px" }}>
+            Trex Proje & Operasyon Konsolu
+          </p>
         </div>
-      </header>
-      <div className="brand-sep" />
 
-      <div className="card">
-        <h1 className="title">Giriş Yap</h1>
-        <p className="subtitle">Hesabınıza erişmek için bilgilerinizi girin</p>
+        {error && (
+          <div style={{
+            background: "color-mix(in oklab, var(--danger) 10%, transparent)",
+            border: "1px solid var(--danger)",
+            color: "var(--danger)",
+            padding: "12px",
+            borderRadius: "12px",
+            fontSize: "13px",
+            marginBottom: "24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }}>
+            <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: "currentColor" }} />
+            {error}
+          </div>
+        )}
 
-        {error && <div className="error">{error}</div>}
-
-        <form className="form" onSubmit={onSubmit}>
-          {/* Email */}
-          <div className="field">
-            <label className="label">Email</label>
-            <input
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
+        <form onSubmit={onSubmit}>
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--text)", marginBottom: "8px" }}>
+              Email Adresi
+            </label>
+            <div style={{ position: "relative" }}>
+              <Mail size={18} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="ornek@sirket.com"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px 12px 42px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  background: "color-mix(in oklab, var(--bg) 50%, transparent)",
+                  fontSize: "14px",
+                  color: "var(--text)",
+                  outline: "none",
+                  transition: "all 0.2s"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "var(--primary)";
+                  e.target.style.boxShadow = "0 0 0 3px var(--ring)";
+                  e.target.style.background = "var(--bg)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "var(--border)";
+                  e.target.style.boxShadow = "none";
+                  e.target.style.background = "color-mix(in oklab, var(--bg) 50%, transparent)";
+                }}
+              />
+            </div>
           </div>
 
-          {/* Password */}
-          <div className="field">
-            <label className="label">Şifre</label>
+          <div style={{ marginBottom: "24px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
+                Şifre
+              </label>
+              <a href="#" style={{ fontSize: "12px", color: "var(--primary)", textDecoration: "none", fontWeight: "500" }}>
+                Şifremi unuttum?
+              </a>
+            </div>
             <div style={{ position: "relative" }}>
+              <Lock size={18} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
               <input
-                className="input has-icon"
                 type={show ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
                 required
+                placeholder="••••••••"
+                style={{
+                  width: "100%",
+                  padding: "12px 42px 12px 42px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  background: "color-mix(in oklab, var(--bg) 50%, transparent)",
+                  fontSize: "14px",
+                  color: "var(--text)",
+                  outline: "none",
+                  transition: "all 0.2s"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "var(--primary)";
+                  e.target.style.boxShadow = "0 0 0 3px var(--ring)";
+                  e.target.style.background = "var(--bg)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "var(--border)";
+                  e.target.style.boxShadow = "none";
+                  e.target.style.background = "color-mix(in oklab, var(--bg) 50%, transparent)";
+                }}
               />
               <button
                 type="button"
-                className="input-icon"
-                aria-label={show ? "Şifreyi gizle" : "Şifreyi göster"}
-                onClick={() => setShow((v) => !v)}
+                onClick={() => setShow(!show)}
+                style={{
+                  position: "absolute",
+                  right: "14px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  padding: 0,
+                  display: "flex"
+                }}
               >
-                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                  <path fill="currentColor" d="M12 5c5 0 9 5 9 7s-4 7-9 7-9-5-9-7 4-7 9-7zm0 3a4 4 0 100 8 4 4 0 000-8z"/>
-                </svg>
+                {show ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
-          <div className="row-sm">
-            <label className="checkbox">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              Beni hatırla
+          <div style={{ marginBottom: "24px", display: "flex", alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+              <div style={{
+                width: "18px",
+                height: "18px",
+                borderRadius: "5px",
+                border: remember ? "none" : "2px solid var(--border)",
+                background: remember ? "var(--primary)" : "transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: "8px",
+                transition: "all 0.2s"
+              }}>
+                {remember && <CheckCircle2 size={12} color="var(--bg)" />}
+              </div>
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                style={{ display: "none" }}
+              />
+              <span style={{ fontSize: "13px", color: "var(--muted)" }}>Beni hatırla</span>
             </label>
-            <a className="link" href="#">Şifremi unuttum</a>
           </div>
 
-          <button className="btn" type="submit" disabled={loading}>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: "var(--primary)",
+              color: "var(--bg)",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: "0 4px 12px color-mix(in oklab, var(--primary) 25%, transparent)",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              opacity: loading ? 0.7 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 6px 16px color-mix(in oklab, var(--primary) 35%, transparent)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 4px 12px color-mix(in oklab, var(--primary) 25%, transparent)";
+            }}
+          >
             {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
+            {!loading && <ArrowRight size={18} />}
           </button>
-
-          <div className="foot">
-            Kuruma yeni mi katıldın? <a href="#">Erişim iste</a>
-          </div>
         </form>
+
+        <div style={{ marginTop: "32px", textAlign: "center" }}>
+          <p style={{ fontSize: "13px", color: "var(--muted)" }}>
+            Hesabınız yok mu? <a href="#" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: "600" }}>Yönetici ile iletişime geçin</a>
+          </p>
+        </div>
       </div>
     </div>
   );

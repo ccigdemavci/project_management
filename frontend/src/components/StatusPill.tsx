@@ -5,6 +5,7 @@ export type ProjectStatus =
   | "active"
   | "at-risk"
   | "on-hold"
+  | "hold"
   | "done";
 
 const map: Record<ProjectStatus, { label: string; cls: string }> = {
@@ -12,6 +13,7 @@ const map: Record<ProjectStatus, { label: string; cls: string }> = {
   active: { label: "Aktif", cls: "pill active" },
   "at-risk": { label: "Risk", cls: "pill risk" },
   "on-hold": { label: "Askıda", cls: "pill hold" },
+  hold: { label: "Askıda", cls: "pill hold" },
   done: { label: "Tamamlandı", cls: "pill done" },
 };
 

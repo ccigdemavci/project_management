@@ -1,10 +1,10 @@
 # backend/app/routers/projects.py
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_  # <- or_ eklendi
 
 from ..db import get_db
 from ..core.auth import get_current_user
@@ -23,6 +23,7 @@ from ..models import (
     ProjectNote,
     Department,
     ProjectMemberRole,
+    ProjectPriority,
 )
 
 from ..schemas import (
@@ -72,17 +73,23 @@ def _enum_to_str(e) -> str:
     return e.value if hasattr(e, "value") else str(e)
 
 
-def _to_out(p: Project) -> ProjectOut:
+def _to_out(p: Project, member_count: Optional[int] = None) -> ProjectOut:
     """ORM Project -> ProjectOut (Enum -> string)"""
+    default_team = 1 if p.owner_id else 0
+    size = member_count if member_count is not None else len(p.members or [])
+    if size == 0:
+        size = default_team
     return ProjectOut(
         id=p.id,
         title=p.title,
         status=_enum_to_str(p.status),
+        priority=_enum_to_str(p.priority),
         progress=p.progress,
         owner_id=p.owner_id,
         start_date=p.start_date,
         end_date=p.end_date,
         created_at=p.created_at,
+        team_size=size,
     )
 
 
@@ -99,6 +106,7 @@ def create_project(
     proj = Project(
         title=data.title,
         status=_parse_status(data.status) if data.status else ProjectStatus.planning,
+        priority=ProjectPriority[data.priority] if data.priority else ProjectPriority.Normal,
         progress=data.progress or 0,
         start_date=data.start_date,
         end_date=data.end_date,
@@ -119,7 +127,7 @@ def create_project(
     )
     db.commit()
 
-    return _to_out(proj)
+    return _to_out(proj, member_count=1)
 
 
 @router.get("/overview", response_model=List[ProjectSummaryOut])
@@ -174,7 +182,7 @@ def projects_overview(
             ProjectSummaryOut(
                 id=p.id,
                 title=p.title,
-                status=_enum_to_str(p.status),   # <- burada string veriyoruz
+                status=_enum_to_str(p.status),   # string
                 progress=p.progress,
                 start_date=p.start_date,
                 end_date=p.end_date,
@@ -187,23 +195,51 @@ def projects_overview(
     return summaries
 
 
+# --------- LISTE: everyone sees all (auth required), optional scope=mine ---------
 @router.get("", response_model=List[ProjectOut])
-def list_my_projects(
-    status: Optional[str] = Query(None, description="Filter by status: Planning, Executing, ..."),
+def list_projects(
+    status: Optional[str] = Query(None, description="Filter by status: planning/executing/..."),
+    scope: str = Query("all", pattern="^(all|mine)$"),   # <-- varsayılan: all
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    scope=all  -> tüm projeler (her auth kullanıcı görebilir)
+    scope=mine -> sadece kullanıcının sahibi/üyesi olduğu projeler
+    """
     q = db.query(Project)
 
-    if current_user.role != "admin":
-        q = q.filter(Project.owner_id == current_user.id)
+    if scope == "mine":
+        q = (
+            q.outerjoin(ProjectMember, ProjectMember.project_id == Project.id)
+             .filter(or_(Project.owner_id == current_user.id,
+                         ProjectMember.user_id == current_user.id))
+        )
+    # scope == "all" → filtre yok
 
     if status:
         st = _parse_status(status)
         q = q.filter(Project.status == st)
 
-    projects = q.all()
-    return [_to_out(p) for p in projects]
+    projects = q.order_by(Project.created_at.desc()).all()
+    
+    # Debug print for first project
+    if projects:
+        print(f"DEBUG: First project priority in DB: {projects[0].priority}")
+
+    member_counts = {}
+    if projects:
+        pids = [p.id for p in projects]
+        rows = (
+            db.query(ProjectMember.project_id, func.count(ProjectMember.id))
+            .filter(ProjectMember.project_id.in_(pids))
+            .group_by(ProjectMember.project_id)
+            .all()
+        )
+        for pid, count in rows:
+            member_counts[pid] = count
+
+    return [_to_out(p, member_counts.get(p.id, 0)) for p in projects]
 
 
 @router.get("/{pid}", response_model=ProjectOut)
@@ -213,7 +249,13 @@ def get_project(
     current_user: User = Depends(get_current_user),
 ):
     proj = require_project_read(db, pid, current_user)
-    return _to_out(proj)
+    member_counts: Dict[int, int] = dict(
+        db.query(ProjectMember.project_id, func.count(ProjectMember.id))
+        .filter(ProjectMember.project_id == pid)
+        .group_by(ProjectMember.project_id)
+        .all()
+    )
+    return _to_out(proj, member_counts.get(pid, None))
 
 
 @router.patch("/{pid}", response_model=ProjectOut)
@@ -235,9 +277,14 @@ def update_project(
         proj.start_date = data.start_date
     if data.end_date is not None:
         proj.end_date = data.end_date
+    if data.priority is not None:
+        print(f"DEBUG: Updating priority to {data.priority}")
+        proj.priority = ProjectPriority[data.priority]
+        print(f"DEBUG: proj.priority set to {proj.priority}")
 
     db.commit()
     db.refresh(proj)
+    print(f"DEBUG: Post-commit priority: {proj.priority}")
     return _to_out(proj)
 
 

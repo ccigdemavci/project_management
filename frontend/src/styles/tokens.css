@@ -24,7 +24,7 @@
 /* Light */
 
 :root[data-theme="light"] {
-    --bg: #f5faf7;
+    --bg: #ffffff;
     --card: #ffffff;
     --muted: #5d6f63;
     --text: #0b1a12;

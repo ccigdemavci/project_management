@@ -265,7 +265,7 @@ def _to_out(p: ProjectPhase) -> ProjectPhaseOut:
         id=p.id,
         project_id=p.project_id,
         name=p.name,
-        sort_order=p.sort_order,  # sort_order doğru alan
+        sort_order=p.sort_order,
         status=p.status.value if hasattr(p.status, "value") else str(p.status),
         start_date=p.start_date,
         end_date=p.end_date,

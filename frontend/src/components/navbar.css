@@ -1,68 +1,104 @@
 .nv {
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: 50;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
-    margin-bottom: 18px;
-    border-radius: 16px;
-    background: color-mix(in oklab, var(--bg) 85%, transparent);
-    backdrop-filter: blur(8px) saturate(1.1);
-    border: 1px solid var(--border);
+    padding: 0 32px;
+    height: 72px;
+    width: 100%;
+    background: linear-gradient(90deg,
+            color-mix(in srgb, var(--card) 20%, var(--primary) 60%),
+            color-mix(in srgb, var(--card) 60%, var(--accent) 30%));
+    backdrop-filter: blur(24px) saturate(2);
+    -webkit-backdrop-filter: blur(24px) saturate(2);
+    border-bottom: none;
+    box-shadow: none;
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    transition: all 0.3s ease;
 }
 
 .nv-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 16px;
 }
 
 .nv-logo {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.nv-logo:hover {
+    transform: scale(1.05);
 }
 
 .nv-title {
     font-weight: 700;
-    letter-spacing: .2px;
+    font-size: 18px;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nv-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 500;
+    opacity: 0.8;
 }
 
 .nv-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 20px;
 }
 
 .nv-user {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    gap: 12px;
+    padding: 6px 12px 6px 6px;
+    border-radius: 99px;
+    background: color-mix(in srgb, var(--text) 3%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.nv-user:hover {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .nv-avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-    background: #223;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-}
-
-:root[data-theme="light"] .nv-avatar {
-    background: #eef3fb;
-    color: #223;
+    font-size: 13px;
+    text-transform: uppercase;
+    box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.2);
 }
 
 .nv-name {
     font-size: 14px;
-    color: var(--muted);
+    color: var(--text);
+    font-weight: 600;
 }
