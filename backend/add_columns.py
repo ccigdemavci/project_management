@@ -1,6 +1,11 @@
 import sqlite3
 import os
 
+"""
+This script adds new columns to the 'phase_details' table in the SQLite database if they don't exist.
+It is intended to be run manually to migrate the database schema.
+"""
+
 DB_PATH = "trex.db"
 
 def add_column(cursor, table, column, type_def):
