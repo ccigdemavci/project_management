@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
-import { ArrowLeft, Search, Layout, Plus, X, ChevronRight, ChevronLeft, ChevronDown, Filter, MessageSquare, Send, CheckCircle2, Check } from "lucide-react";
+import { ArrowLeft, Search, Layout, Plus, X, ChevronRight, ChevronLeft, ChevronDown, Filter, MessageSquare, Send, CheckCircle2, Check, Download } from "lucide-react";
 import { getProfileName } from "@/lib/auth";
 import {
     apiGet,
@@ -13,8 +13,12 @@ import {
     deletePhaseDetail,
     getPhaseDetailNotes,
     createPhaseDetailNote,
-    BackendPhaseDetailNote
+    BackendPhaseDetailNote,
+    createProjectPhase
 } from "@/lib/api";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // --- Types ---
 
@@ -152,7 +156,7 @@ const styles = {
         overflow: "hidden",
     },
     tableContainer: {
-        width: "900px",
+        width: "1050px",
         display: "flex",
         flexDirection: "column" as const,
         borderRight: "1px solid var(--border)",
@@ -373,6 +377,32 @@ const getPriorityColor = (priority: string) => {
     }
 };
 
+const SortableRow = ({ item, idx, children, style }: any) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: item.id });
+
+    const combinedStyle = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : 1,
+        position: 'relative' as const,
+        ...style,
+        opacity: isDragging ? 0.5 : style.opacity,
+    };
+
+    return (
+        <div ref={setNodeRef} style={combinedStyle} {...attributes} {...listeners}>
+            {children}
+        </div>
+    );
+};
+
 export default function ProjectFullPlan() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -385,6 +415,10 @@ export default function ProjectFullPlan() {
 
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [editingDates, setEditingDates] = useState<{ itemId: string, start: string, end: string } | null>(null);
+    const [nameInputModal, setNameInputModal] = useState<{ isOpen: boolean, type: 'phase' | 'subphase', parentId?: string } | null>(null);
+    const [tempName, setTempName] = useState("");
 
     // Filter State
     const [filterPriority, setFilterPriority] = useState<string>("all");
@@ -411,6 +445,66 @@ export default function ProjectFullPlan() {
     const timelineBodyRef = useRef<HTMLDivElement>(null);
     const isScrolling = useRef<boolean>(false);
 
+    // --- DnD Sensors ---
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const phaseIndex = phases.findIndex(p => p.id === activePhaseId);
+            if (phaseIndex === -1) return;
+
+            const currentDetails = phases[phaseIndex].details;
+            const oldIndex = currentDetails.findIndex(i => String(i.id) === active.id);
+            const newIndex = currentDetails.findIndex(i => String(i.id) === over.id);
+
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const newDetails = arrayMove(currentDetails, oldIndex, newIndex);
+                const updatedPhases = [...phases];
+                updatedPhases[phaseIndex] = {
+                    ...updatedPhases[phaseIndex],
+                    details: newDetails
+                };
+                setPhases(updatedPhases);
+            }
+        }
+    };
+
+    // Build tree from flat list
+    const buildPhaseTree = (details: BackendPhaseDetail[]): BackendPhaseDetail[] => {
+        const map = new Map<number, BackendPhaseDetail>();
+        const roots: BackendPhaseDetail[] = [];
+
+        // Initialize map and children array
+        details.forEach(item => {
+            map.set(item.id, { ...item, children: [] });
+        });
+
+        // Build tree
+        details.forEach(item => {
+            const node = map.get(item.id);
+            if (!node) return;
+
+            if (item.parent_id && map.has(item.parent_id)) {
+                const parent = map.get(item.parent_id);
+                parent?.children?.push(node);
+            } else {
+                roots.push(node);
+            }
+        });
+
+        return roots;
+    };
+
     // Fetch Data
     const fetchData = async () => {
         if (!id) return;
@@ -420,7 +514,9 @@ export default function ProjectFullPlan() {
             const phasesWithDetails = await Promise.all(
                 phasesData.map(async (p) => {
                     const details = await getPhaseDetails(String(p.id)).catch(() => []);
-                    return { ...p, details };
+                    // Convert flat list to tree
+                    const treeDetails = buildPhaseTree(details);
+                    return { ...p, details: treeDetails };
                 })
             );
             setPhases(phasesWithDetails);
@@ -697,6 +793,74 @@ export default function ProjectFullPlan() {
         }
     };
 
+    const handleDateSave = async () => {
+        if (!editingDates) return;
+        try {
+            // Optimistic update
+            const updatedPhases = phases.map(phase => {
+                if (phase.details) {
+                    return {
+                        ...phase,
+                        details: updateItemInTree(phase.details, editingDates.itemId, {
+                            start_date: editingDates.start,
+                            end_date: editingDates.end
+                        })
+                    };
+                }
+                return phase;
+            });
+            setPhases(updatedPhases);
+
+            await updatePhaseDetail(editingDates.itemId, {
+                start_date: editingDates.start,
+                end_date: editingDates.end
+            });
+            setEditingDates(null);
+            fetchData(); // Refresh to ensure consistency
+        } catch (err) {
+            console.error("Failed to update dates:", err);
+            fetchData(); // Revert on error
+        }
+    };
+
+    const handleAddPhase = () => {
+        setTempName("");
+        setNameInputModal({ isOpen: true, type: 'phase' });
+    };
+
+    const handleAddSubPhase = () => {
+        if (!activePhaseId) return;
+        setTempName("");
+        setNameInputModal({ isOpen: true, type: 'subphase' });
+    };
+
+    const handleModalSubmit = async () => {
+        if (!tempName.trim()) return;
+
+        try {
+            if (nameInputModal?.type === 'phase') {
+                if (!id) return;
+                await createProjectPhase(id, { name: tempName });
+            } else if (nameInputModal?.type === 'subphase') {
+                if (!activePhaseId) return;
+                await createPhaseDetail({
+                    phase_id: activePhaseId,
+                    title: tempName,
+                    item_type: "sub_phase",
+                    is_completed: false,
+                    sort_order: items.length,
+                    parent_id: activeSubPhaseId || null
+                });
+            }
+            fetchData();
+            setNameInputModal(null);
+            setTempName("");
+        } catch (err) {
+            console.error("Failed to create item:", err);
+            alert("İşlem sırasında bir hata oluştu.");
+        }
+    };
+
     function updateItemInTree(items: BackendPhaseDetail[], itemId: string, updates: any): BackendPhaseDetail[] {
         return items.map(item => {
             if (String(item.id) === itemId) {
@@ -728,6 +892,42 @@ export default function ProjectFullPlan() {
         };
     };
 
+    const handleExport = () => {
+        if (!phases.length) return;
+
+        // Header
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Faz,Aksiyon,Durum,Öncelik,Kapsam,Referans,Sorumlu,Efor,Birim,Başlangıç,Bitiş,Tamamlanma\n";
+
+        phases.forEach(phase => {
+            phase.details.forEach(item => {
+                const row = [
+                    phase.name,
+                    item.title,
+                    item.is_completed ? "Tamamlandı" : "Bekliyor",
+                    item.priority || "",
+                    item.scope || "",
+                    item.reference || "",
+                    item.responsible || "",
+                    item.effort || 0,
+                    item.unit || "",
+                    item.start_date || "",
+                    item.end_date || "",
+                    item.completed_at || ""
+                ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(",");
+                csvContent += row + "\n";
+            });
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "proje_plani.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div style={styles.container}>
             <Navbar
@@ -740,15 +940,29 @@ export default function ProjectFullPlan() {
 
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                 {/* Sidebar */}
-                <aside style={styles.sidebar}>
-                    <div style={styles.sidebarHeader}>
-                        <button
-                            onClick={() => navigate(-1)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', marginBottom: '16px' }}
-                        >
-                            <ArrowLeft size={16} />
-                            Projeye Dön
-                        </button>
+                <aside style={{
+                    ...styles.sidebar,
+                    width: isSidebarOpen ? "260px" : "0px",
+                    transition: "width 0.3s ease",
+                    overflow: "hidden",
+                    borderRight: isSidebarOpen ? "1px solid var(--border)" : "none"
+                }}>
+                    <div style={{ ...styles.sidebarHeader, minWidth: "260px" }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <button
+                                onClick={() => navigate(-1)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', marginBottom: '16px' }}
+                            >
+                                <ArrowLeft size={16} />
+                                Projeye Dön
+                            </button>
+                            <button
+                                onClick={() => setIsSidebarOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                        </div>
                         <h2 style={styles.sidebarTitle}>Proje Adımları</h2>
                         <p style={styles.sidebarSubtitle}>Master Aksiyon Planı</p>
                     </div>
@@ -795,23 +1009,53 @@ export default function ProjectFullPlan() {
                                         </button>
 
                                         {/* Sub Phases */}
-                                        {isExpanded && subPhases.map(sub => (
-                                            <button
-                                                key={sub.id}
-                                                onClick={() => {
+                                        {isExpanded && (
+                                            <RecursiveSubPhaseList
+                                                items={phase.details}
+                                                activeSubPhaseId={activeSubPhaseId ? String(activeSubPhaseId) : null}
+                                                onSelect={(id) => {
                                                     setActivePhaseId(phase.id);
-                                                    setActiveSubPhaseId(sub.id);
+                                                    setActiveSubPhaseId(Number(id));
                                                 }}
-                                                style={{ ...styles.subNavButton, ...(activeSubPhaseId === sub.id ? styles.subNavButtonActive : {}) }}
-                                            >
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.title}</span>
-                                            </button>
-                                        ))}
+                                            />
+                                        )}
                                     </div>
                                 );
                             })
                         )}
                     </nav>
+
+                    <div style={{ padding: '16px', borderTop: '1px solid var(--border)' }}>
+                        <button
+                            onClick={handleAddPhase}
+                            style={{
+                                width: '100%',
+                                padding: '10px',
+                                borderRadius: '6px',
+                                border: '1px dashed var(--border)',
+                                backgroundColor: 'transparent',
+                                color: 'var(--muted)',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = 'var(--primary)';
+                                e.currentTarget.style.color = 'var(--primary)';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = 'var(--border)';
+                                e.currentTarget.style.color = 'var(--muted)';
+                            }}
+                        >
+                            <Plus size={16} />
+                            Yeni Faz Ekle
+                        </button>
+                    </div>
                 </aside>
 
                 {/* Main Content */}
@@ -819,89 +1063,117 @@ export default function ProjectFullPlan() {
                     {/* Top Bar */}
                     <header style={styles.header}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Layout size={20} color="var(--primary)" />
-                                <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text)', margin: 0 }}>
-                                    {activePhase ? activePhase.name : "Yükleniyor..."}
-                                    {activeSubPhaseId && items.length > 0 && (
-                                        <span style={{ fontWeight: 'normal', color: 'var(--muted)' }}> / {items.find(i => i.id === String(activeSubPhaseId))?.action || "Alt Faz"}</span>
-                                    )}
-                                </h1>
+                            {!isSidebarOpen && (
+                                <button
+                                    onClick={() => setIsSidebarOpen(true)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
+                                    title="Menüyü Aç"
+                                >
+                                    <Layout size={20} />
+                                </button>
+                            )}
+                            <div style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                                <Layout size={20} />
                             </div>
-                            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button style={styles.btnSoft} onClick={() => setTimelineStart(new Date(new Date(timelineStart).setDate(timelineStart.getDate() - 7)))}>
-                                    <ChevronLeft size={14} />
-                                </button>
-                                <span style={{ fontSize: '14px', fontFamily: 'monospace', color: 'var(--muted)' }}>
-                                    {timelineStart.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
-                                </span>
-                                <button style={styles.btnSoft} onClick={() => setTimelineStart(new Date(new Date(timelineStart).setDate(timelineStart.getDate() + 7)))}>
-                                    <ChevronRight size={14} />
-                                </button>
+                            <div>
+                                <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text)', margin: 0, lineHeight: 1.2 }}>
+                                    {phases.find(p => p.id === activePhaseId)?.name || "Yeni"}
+                                </h1>
+                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text)', lineHeight: 1 }}>
+                                    {phases.find(p => p.id === activePhaseId)?.name.charAt(0).toUpperCase() || "F"}
+                                </div>
                             </div>
                         </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            {/* Filters */}
-                            <div style={styles.filterContainer}>
-                                <Filter size={14} color="var(--muted)" />
-                                <select
-                                    style={styles.filterSelect}
-                                    value={filterPriority}
-                                    onChange={(e) => setFilterPriority(e.target.value)}
-                                >
-                                    <option value="all">Tüm Öncelikler</option>
-                                    <option value="Önemli">Önemli</option>
-                                    <option value="Orta">Orta</option>
-                                    <option value="Normal">Normal</option>
-                                </select>
-
-                                <select
-                                    style={styles.filterSelect}
-                                    value={filterDeadline}
-                                    onChange={(e) => setFilterDeadline(e.target.value)}
-                                >
-                                    <option value="all">Tüm Zamanlar</option>
-                                    <option value="upcoming">Yaklaşanlar (7 Gün)</option>
-                                    <option value="overdue">Gecikenler</option>
-                                </select>
-
-                                {/* Assignee Filter */}
-                                <select
-                                    style={styles.filterSelect}
-                                    value={filterAssignee}
-                                    onChange={(e) => setFilterAssignee(e.target.value)}
-                                >
-                                    <option value="all">Tüm Sorumlular</option>
-                                    {uniqueAssignees.map(u => (
-                                        <option key={u} value={u}>{u}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
-
-                            <div style={styles.searchContainer}>
-                                <Search size={14} color="var(--muted)" style={{ position: 'absolute', left: '10px' }} />
-                                <input
-                                    style={styles.searchInput}
-                                    placeholder="Bu bölümde ara..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
-                            <button
-                                onClick={handleAddItem}
-                                style={{ ...styles.btnPrimary, opacity: !activePhaseId ? 0.5 : 1 }}
-                                disabled={!activePhaseId}
-                            >
-                                <Plus size={14} />
-                                <span>Yeni Aksiyon</span>
+                        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button style={styles.btnSoft} onClick={() => setTimelineStart(new Date(new Date(timelineStart).setDate(timelineStart.getDate() - 7)))}>
+                                <ChevronLeft size={14} />
+                            </button>
+                            <span style={{ fontSize: '14px', fontFamily: 'monospace', color: 'var(--muted)' }}>
+                                {timelineStart.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
+                            </span>
+                            <button style={styles.btnSoft} onClick={() => setTimelineStart(new Date(new Date(timelineStart).setDate(timelineStart.getDate() + 7)))}>
+                                <ChevronRight size={14} />
                             </button>
                         </div>
                     </header>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {/* Filters */}
+                        <div style={styles.filterContainer}>
+                            <Filter size={14} color="var(--muted)" />
+                            <select
+                                style={styles.filterSelect}
+                                value={filterPriority}
+                                onChange={(e) => setFilterPriority(e.target.value)}
+                            >
+                                <option value="all">Tüm Öncelikler</option>
+                                <option value="Önemli">Önemli</option>
+                                <option value="Orta">Orta</option>
+                                <option value="Normal">Normal</option>
+                            </select>
+
+                            <select
+                                style={styles.filterSelect}
+                                value={filterDeadline}
+                                onChange={(e) => setFilterDeadline(e.target.value)}
+                            >
+                                <option value="all">Tüm Zamanlar</option>
+                                <option value="upcoming">Yaklaşanlar (7 Gün)</option>
+                                <option value="overdue">Gecikenler</option>
+                            </select>
+
+                            {/* Assignee Filter */}
+                            <select
+                                style={styles.filterSelect}
+                                value={filterAssignee}
+                                onChange={(e) => setFilterAssignee(e.target.value)}
+                            >
+                                <option value="all">Tüm Sorumlular</option>
+                                {uniqueAssignees.map(u => (
+                                    <option key={u} value={u}>{u}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
+
+                        <div style={styles.searchContainer}>
+                            <Search size={14} color="var(--muted)" style={{ position: 'absolute', left: '10px' }} />
+                            <input
+                                style={styles.searchInput}
+                                placeholder="Bu bölümde ara..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            onClick={handleExport}
+                            style={{ ...styles.btnSoft, marginRight: '8px' }}
+                            title="Excel Olarak İndir"
+                        >
+                            <Download size={14} />
+                            <span style={{ marginLeft: '6px' }}>İndir</span>
+                        </button>
+                        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
+                        <button
+                            onClick={handleAddItem}
+                            style={{ ...styles.btnPrimary, opacity: !activePhaseId ? 0.5 : 1 }}
+                            disabled={!activePhaseId}
+                        >
+                            <Plus size={14} />
+                            <span>Yeni Aksiyon</span>
+                        </button>
+                        <button
+                            onClick={handleAddSubPhase}
+                            style={{ ...styles.btnSoft, marginLeft: '8px', opacity: !activePhaseId ? 0.5 : 1 }}
+                            disabled={!activePhaseId}
+                        >
+                            <Plus size={14} />
+                            <span>Yeni Alt Faz</span>
+                        </button>
+                    </div>
+
 
                     {/* Split View Container */}
                     <div style={styles.splitView}>
@@ -911,253 +1183,283 @@ export default function ProjectFullPlan() {
                             {/* Table Header */}
                             <div style={styles.tableHeader}>
                                 <div style={{ ...styles.cell, width: '40px', justifyContent: 'center' }}>#</div>
-                                <div style={{ ...styles.cell, width: '40px', justifyContent: 'center' }}>D</div>
+                                <div style={{ ...styles.cell, width: '70px', justifyContent: 'center' }}>Durum</div>
                                 <div style={{ ...styles.cell, flex: 1 }}>Aksiyon</div>
                                 <div style={{ ...styles.cell, width: '100px', justifyContent: 'center' }}>Öncelik</div>
-                                <div style={{ ...styles.cell, width: '120px' }}>Kapsam</div>
-                                <div style={{ ...styles.cell, width: '100px' }}>Referans</div>
+                                <div style={{ ...styles.cell, width: '90px' }}>Kapsam</div>
+                                <div style={{ ...styles.cell, width: '80px' }}>Referans</div>
                                 <div style={{ ...styles.cell, width: '120px' }}>Sorumlu</div>
-                                <div style={{ ...styles.cell, width: '120px', justifyContent: 'center' }}>Efor</div>
+                                <div style={{ ...styles.cell, width: '80px', justifyContent: 'center' }}>Efor</div>
                                 <div style={{ ...styles.cell, width: '50px', justifyContent: 'center' }}>Not</div>
                                 <div style={{ ...styles.cell, width: '50px', justifyContent: 'center', borderRight: 'none' }}>Sil</div>
                             </div>
 
                             {/* Table Body */}
-                            <div
-                                style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
-                                ref={tableBodyRef}
-                                onScroll={handleTableScroll}
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
                             >
-                                {items.map((item, idx) => (
-                                    <div
-                                        key={item.id}
-                                        style={{
-                                            ...styles.tableRow,
-                                            backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(128,128,128,0.03)',
-                                            opacity: item.original.is_completed ? 0.5 : 1, // Dim completed items
-                                        }}
+                                <div
+                                    style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
+                                    ref={tableBodyRef}
+                                    onScroll={handleTableScroll}
+                                >
+                                    <SortableContext
+                                        items={items.map(i => i.id)}
+                                        strategy={verticalListSortingStrategy}
                                     >
-                                        <div style={{ ...styles.cell, width: '40px', justifyContent: 'center', color: 'var(--muted)', fontFamily: 'monospace' }}>{idx + 1}</div>
-
-                                        {/* Checkbox & Status */}
-                                        <div style={{ ...styles.cell, width: '40px', justifyContent: 'center', position: 'relative' }}>
-                                            <button
-                                                onClick={() => handleToggleComplete(item)}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    padding: 0
-                                                }}
-                                                title={(() => {
-                                                    if (!item.original.is_completed) return "Tamamla";
-                                                    if (!item.original.completed_at || !item.end_date) return "Tamamlandı";
-
-                                                    const completed = new Date(item.original.completed_at);
-                                                    const end = new Date(item.end_date);
-                                                    const cDate = new Date(completed.getFullYear(), completed.getMonth(), completed.getDate());
-                                                    const eDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-                                                    if (cDate > eDate) return `Geç Tamamlandı (${completed.toLocaleDateString()})`;
-                                                    if (cDate < eDate) return `Erken Tamamlandı (${completed.toLocaleDateString()})`;
-                                                    return `Zamanında Tamamlandı (${completed.toLocaleDateString()})`;
-                                                })()}
+                                        {items.map((item, idx) => (
+                                            <SortableRow
+                                                key={item.id}
+                                                item={item}
+                                                idx={idx}
+                                                style={styles.tableRow}
                                             >
-                                                {item.original.is_completed ? (
-                                                    <div style={{
-                                                        width: '20px',
-                                                        height: '20px',
-                                                        borderRadius: '50%',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        backgroundColor: (() => {
-                                                            // If dates are missing, default to Green (Standard Done) instead of Gray/Blue
-                                                            if (!item.original.completed_at || !item.end_date) return '#22c55e';
+                                                <div style={{ ...styles.cell, width: '40px', justifyContent: 'center', color: 'var(--muted)', fontFamily: 'monospace' }}>{idx + 1}</div>
+
+                                                {/* Checkbox & Status */}
+                                                <div style={{ ...styles.cell, width: '70px', justifyContent: 'flex-start', position: 'relative', gap: '8px' }}>
+                                                    <button
+                                                        onClick={() => handleToggleComplete(item)}
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            padding: 0
+                                                        }}
+                                                        title={(() => {
+                                                            if (!item.original.is_completed) return "Tamamla";
+                                                            if (!item.original.completed_at || !item.end_date) return "Tamamlandı (Tarih Bilgisi Eksik - Varsayılan Yeşil)";
 
                                                             const completed = new Date(item.original.completed_at);
                                                             const end = new Date(item.end_date);
                                                             const cDate = new Date(completed.getFullYear(), completed.getMonth(), completed.getDate());
                                                             const eDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
-                                                            if (cDate > eDate) return '#ef4444'; // Late -> Red
-                                                            if (cDate < eDate) return '#8b5cf6'; // Early -> Purple
-                                                            return '#22c55e'; // On Time -> Green
-                                                        })()
-                                                    }}>
-                                                        <Check size={14} color="white" strokeWidth={3} />
-                                                    </div>
-                                                ) : (
-                                                    <div style={{
-                                                        width: '18px',
-                                                        height: '18px',
-                                                        borderRadius: '50%',
-                                                        border: '2px solid var(--muted)',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-                                                        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--muted)'}
-                                                    />
-                                                )}
-                                            </button>
-                                        </div>
+                                                            const dateStr = `(Bitim: ${end.toLocaleDateString()} - Tamamlanma: ${completed.toLocaleDateString()})`;
 
-                                        {/* Action Input */}
-                                        <div style={{ ...styles.cell, flex: 1, cursor: 'pointer', fontWeight: 500, textDecoration: item.original.is_completed ? 'line-through' : 'none' }} onClick={() => handleCellClick(item, "action", item.action)}>
-                                            {editingCell?.itemId === item.id && editingCell.field === "action" ? (
-                                                <input
-                                                    style={styles.input}
-                                                    value={editValue}
-                                                    onChange={e => setEditValue(e.target.value)}
-                                                    onBlur={handleSave}
-                                                    onKeyDown={handleKeyDown}
-                                                    autoFocus
-                                                />
-                                            ) : item.action}
-                                        </div>
-
-                                        {/* Priority */}
-                                        <div style={{ ...styles.cell, width: '100px', justifyContent: 'center', cursor: 'pointer' }} onClick={() => handleCellClick(item, "priority", item.priority)}>
-                                            {editingCell?.itemId === item.id && editingCell.field === "priority" ? (
-                                                <select
-                                                    style={styles.select}
-                                                    value={editValue}
-                                                    onChange={e => {
-                                                        setEditValue(e.target.value);
-                                                        // Auto save on selection change
-                                                        updatePhaseDetail(item.id, { priority: e.target.value }).then(() => {
-                                                            setEditingCell(null);
-                                                            fetchData();
-                                                        });
-                                                    }}
-                                                    onBlur={() => setEditingCell(null)}
-                                                    autoFocus
-                                                >
-                                                    <option value="Normal">Normal</option>
-                                                    <option value="Orta">Orta</option>
-                                                    <option value="Önemli">Önemli</option>
-                                                </select>
-                                            ) : (
-                                                <span style={{
-                                                    ...styles.priorityBadge,
-                                                    backgroundColor: getPriorityColor(item.priority).bg,
-                                                    color: getPriorityColor(item.priority).color
-                                                }}>
-                                                    {item.priority}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Scope */}
-                                        <div style={{ ...styles.cell, width: '120px', color: 'var(--muted)', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "scope", item.scope)}>
-                                            {editingCell?.itemId === item.id && editingCell.field === "scope" ? (
-                                                <input
-                                                    style={styles.input}
-                                                    value={editValue}
-                                                    onChange={e => setEditValue(e.target.value)}
-                                                    onBlur={handleSave}
-                                                    onKeyDown={handleKeyDown}
-                                                    autoFocus
-                                                />
-                                            ) : item.scope || "-"}
-                                        </div>
-
-                                        {/* Reference */}
-                                        <div style={{ ...styles.cell, width: '100px', color: 'var(--muted)', fontFamily: 'monospace', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "reference", item.reference)}>
-                                            {editingCell?.itemId === item.id && editingCell.field === "reference" ? (
-                                                <input
-                                                    style={styles.input}
-                                                    value={editValue}
-                                                    onChange={e => setEditValue(e.target.value)}
-                                                    onBlur={handleSave}
-                                                    onKeyDown={handleKeyDown}
-                                                    autoFocus
-                                                />
-                                            ) : item.reference || "-"}
-                                        </div>
-
-                                        {/* Responsible */}
-                                        <div style={{ ...styles.cell, width: '120px', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "responsible", item.responsible)}>
-                                            {editingCell?.itemId === item.id && editingCell.field === "responsible" ? (
-                                                <input
-                                                    style={styles.input}
-                                                    value={editValue}
-                                                    onChange={e => setEditValue(e.target.value)}
-                                                    onBlur={handleSave}
-                                                    onKeyDown={handleKeyDown}
-                                                    autoFocus
-                                                />
-                                            ) : (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    {item.responsible.includes("trex") && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--primary)' }} />}
-                                                    {item.responsible.includes("Müşteri") && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#d29922' }} />}
-                                                    <span style={{ color: 'var(--text)' }}>{item.responsible || "Seç..."}</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Effort (Combined Input) */}
-                                        <div style={{ ...styles.cell, width: '120px', justifyContent: 'center', fontFamily: 'monospace', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "effort", item.effort)}>
-                                            {editingCell?.itemId === item.id && editingCell.field === "effort" ? (
-                                                <div
-                                                    style={{ display: 'flex', gap: '4px', width: '100%' }}
-                                                    onBlur={(e) => {
-                                                        // Only save if focus moves outside the container
-                                                        if (!e.currentTarget.contains(e.relatedTarget)) {
-                                                            handleSave();
-                                                        }
-                                                    }}
-                                                >
-                                                    <input
-                                                        style={{ ...styles.input, width: '50px', textAlign: 'center' }}
-                                                        value={editValue}
-                                                        onChange={e => setEditValue(e.target.value)}
-                                                        onKeyDown={handleKeyDown}
-                                                        autoFocus
-                                                        type="number"
-                                                        placeholder="0"
-                                                    />
-                                                    <select
-                                                        style={{ ...styles.select, width: '60px', padding: '0 4px', fontSize: '11px' }}
-                                                        value={editUnit}
-                                                        onChange={e => setEditUnit(e.target.value)}
-                                                    // onBlur removed here, handled by parent div
+                                                            if (cDate > eDate) return `Geç Tamamlandı ${dateStr}`; // Red
+                                                            if (cDate < eDate) return `Erken Tamamlandı ${dateStr}`; // Green
+                                                            return `Zamanında Tamamlandı ${dateStr}`; // Blue
+                                                        })()}
                                                     >
-                                                        <option value="Dakika">Dk</option>
-                                                        <option value="Saat">Saat</option>
-                                                        <option value="Gün">Gün</option>
-                                                        <option value="Ay">Ay</option>
-                                                    </select>
+                                                        {item.original.is_completed ? (
+                                                            <div style={{
+                                                                width: '20px',
+                                                                height: '20px',
+                                                                borderRadius: '50%',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                backgroundColor: (() => {
+                                                                    // If dates are missing, default to Green (Standard Done)
+                                                                    if (!item.original.completed_at || !item.end_date) return '#22c55e';
+
+                                                                    const completed = new Date(item.original.completed_at);
+                                                                    const end = new Date(item.end_date);
+                                                                    const cDate = new Date(completed.getFullYear(), completed.getMonth(), completed.getDate());
+                                                                    const eDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+                                                                    if (cDate > eDate) return '#ef4444'; // Late -> Red
+                                                                    if (cDate < eDate) return '#22c55e'; // Early -> Green
+                                                                    return '#3b82f6'; // On Time -> Blue
+                                                                })()
+                                                            }}>
+                                                                <Check size={14} color="white" strokeWidth={3} />
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{
+                                                                width: '18px',
+                                                                height: '18px',
+                                                                borderRadius: '50%',
+                                                                border: '2px solid var(--muted)',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                                                                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--muted)'}
+                                                            />
+                                                        )}
+                                                    </button>
+
+                                                    {item.original.is_completed && item.original.completed_at && item.end_date && (
+                                                        <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 500 }}>
+                                                            {(() => {
+                                                                const completed = new Date(item.original.completed_at!);
+                                                                const end = new Date(item.end_date!);
+                                                                const cDate = new Date(completed.getFullYear(), completed.getMonth(), completed.getDate());
+                                                                const eDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+                                                                const diffTime = cDate.getTime() - eDate.getTime();
+                                                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                                                if (diffDays > 0) return `${diffDays} g`;
+                                                                if (diffDays < 0) return `${Math.abs(diffDays)} g`;
+                                                                return "";
+                                                            })()}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                            ) : (item.effort > 0 ? `${item.effort} ${item.unit}` : "-")}
-                                        </div>
 
-                                        {/* Notes */}
-                                        <div style={{ ...styles.cell, width: '50px', justifyContent: 'center' }}>
-                                            <button
-                                                onClick={() => setActiveNoteItem(item)}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
-                                                title="Notlar"
-                                            >
-                                                <MessageSquare size={14} />
-                                            </button>
-                                        </div>
+                                                {/* Action Input */}
+                                                <div style={{ ...styles.cell, flex: 1, cursor: 'pointer', fontWeight: 500, textDecoration: item.original.is_completed ? 'line-through' : 'none' }} onClick={() => handleCellClick(item, "action", item.action)}>
+                                                    {editingCell?.itemId === item.id && editingCell.field === "action" ? (
+                                                        <input
+                                                            style={styles.input}
+                                                            value={editValue}
+                                                            onChange={e => setEditValue(e.target.value)}
+                                                            onBlur={handleSave}
+                                                            onKeyDown={handleKeyDown}
+                                                            autoFocus
+                                                        />
+                                                    ) : item.action}
+                                                </div>
 
-                                        {/* Delete */}
-                                        <div style={{ ...styles.cell, width: '50px', justifyContent: 'center', borderRight: 'none' }}>
-                                            <button
-                                                onClick={() => handleDeleteItem(item.id)}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                title="Sil"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                                {/* Priority */}
+                                                <div style={{ ...styles.cell, width: '100px', justifyContent: 'center', cursor: 'pointer' }} onClick={() => handleCellClick(item, "priority", item.priority)}>
+                                                    {editingCell?.itemId === item.id && editingCell.field === "priority" ? (
+                                                        <select
+                                                            style={styles.select}
+                                                            value={editValue}
+                                                            onChange={e => {
+                                                                setEditValue(e.target.value);
+                                                                // Auto save on selection change
+                                                                updatePhaseDetail(item.id, { priority: e.target.value }).then(() => {
+                                                                    setEditingCell(null);
+                                                                    fetchData();
+                                                                });
+                                                            }}
+                                                            onBlur={() => setEditingCell(null)}
+                                                            autoFocus
+                                                        >
+                                                            <option value="Normal">Normal</option>
+                                                            <option value="Orta">Orta</option>
+                                                            <option value="Önemli">Önemli</option>
+                                                        </select>
+                                                    ) : (
+                                                        <span style={{
+                                                            ...styles.priorityBadge,
+                                                            backgroundColor: getPriorityColor(item.priority).bg,
+                                                            color: getPriorityColor(item.priority).color
+                                                        }}>
+                                                            {item.priority}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Scope */}
+                                                <div style={{ ...styles.cell, width: '90px', color: 'var(--muted)', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "scope", item.scope)}>
+                                                    {editingCell?.itemId === item.id && editingCell.field === "scope" ? (
+                                                        <input
+                                                            style={styles.input}
+                                                            value={editValue}
+                                                            onChange={e => setEditValue(e.target.value)}
+                                                            onBlur={handleSave}
+                                                            onKeyDown={handleKeyDown}
+                                                            autoFocus
+                                                        />
+                                                    ) : item.scope || "-"}
+                                                </div>
+
+                                                {/* Reference */}
+                                                <div style={{ ...styles.cell, width: '80px', color: 'var(--muted)', fontFamily: 'monospace', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "reference", item.reference)}>
+                                                    {editingCell?.itemId === item.id && editingCell.field === "reference" ? (
+                                                        <input
+                                                            style={styles.input}
+                                                            value={editValue}
+                                                            onChange={e => setEditValue(e.target.value)}
+                                                            onBlur={handleSave}
+                                                            onKeyDown={handleKeyDown}
+                                                            autoFocus
+                                                        />
+                                                    ) : item.reference || "-"}
+                                                </div>
+
+                                                {/* Responsible */}
+                                                <div style={{ ...styles.cell, width: '120px', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "responsible", item.responsible)}>
+                                                    {editingCell?.itemId === item.id && editingCell.field === "responsible" ? (
+                                                        <input
+                                                            style={styles.input}
+                                                            value={editValue}
+                                                            onChange={e => setEditValue(e.target.value)}
+                                                            onBlur={handleSave}
+                                                            onKeyDown={handleKeyDown}
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            {item.responsible.includes("trex") && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--primary)' }} />}
+                                                            {item.responsible.includes("Müşteri") && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#d29922' }} />}
+                                                            <span style={{ color: 'var(--text)' }}>{item.responsible || "Seç..."}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Effort (Combined Input) */}
+                                                <div style={{ ...styles.cell, width: '80px', justifyContent: 'center', fontFamily: 'monospace', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleCellClick(item, "effort", item.effort)}>
+                                                    {editingCell?.itemId === item.id && editingCell.field === "effort" ? (
+                                                        <div
+                                                            style={{ display: 'flex', gap: '4px', width: '100%' }}
+                                                            onBlur={(e) => {
+                                                                // Only save if focus moves outside the container
+                                                                if (!e.currentTarget.contains(e.relatedTarget)) {
+                                                                    handleSave();
+                                                                }
+                                                            }}
+                                                        >
+                                                            <input
+                                                                style={{ ...styles.input, width: '50px', textAlign: 'center' }}
+                                                                value={editValue}
+                                                                onChange={e => setEditValue(e.target.value)}
+                                                                onKeyDown={handleKeyDown}
+                                                                autoFocus
+                                                                type="number"
+                                                                placeholder="0"
+                                                            />
+                                                            <select
+                                                                style={{ ...styles.select, width: '60px', padding: '0 4px', fontSize: '11px' }}
+                                                                value={editUnit}
+                                                                onChange={e => setEditUnit(e.target.value)}
+                                                            // onBlur removed here, handled by parent div
+                                                            >
+                                                                <option value="Dakika">Dk</option>
+                                                                <option value="Saat">Saat</option>
+                                                                <option value="Gün">Gün</option>
+                                                                <option value="Ay">Ay</option>
+                                                            </select>
+                                                        </div>
+                                                    ) : (item.effort > 0 ? `${item.effort} ${item.unit}` : "-")}
+                                                </div>
+
+                                                {/* Notes */}
+                                                <div style={{ ...styles.cell, width: '50px', justifyContent: 'center' }}>
+                                                    <button
+                                                        onClick={() => setActiveNoteItem(item)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
+                                                        title="Notlar"
+                                                    >
+                                                        <MessageSquare size={14} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Delete */}
+                                                <div style={{ ...styles.cell, width: '50px', justifyContent: 'center', borderRight: 'none' }}>
+                                                    <button
+                                                        onClick={() => handleDeleteItem(item.id)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        title="Sil"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            </SortableRow>
+                                        ))}
+                                    </SortableContext>
+                                </div>
+                            </DndContext>
                         </div>
 
                         {/* RIGHT: Gantt Timeline (Scrollable) */}
@@ -1204,14 +1506,11 @@ export default function ProjectFullPlan() {
                                                     }}
                                                     title={`${item.action} (${item.start_date?.slice(0, 10)} - ${item.end_date?.slice(0, 10)})`}
                                                     onClick={() => {
-                                                        const newStart = prompt("Başlangıç Tarihi (YYYY-MM-DD):", item.start_date?.slice(0, 10));
-                                                        if (newStart) {
-                                                            const newEnd = prompt("Bitiş Tarihi (YYYY-MM-DD):", item.end_date?.slice(0, 10));
-                                                            if (newEnd) {
-                                                                handleCellClick(item, "start_date", newStart);
-                                                                updatePhaseDetail(item.id, { start_date: newStart, end_date: newEnd }).then(fetchData);
-                                                            }
-                                                        }
+                                                        setEditingDates({
+                                                            itemId: item.id,
+                                                            start: item.start_date ? item.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+                                                            end: item.end_date ? item.end_date.slice(0, 10) : new Date().toISOString().slice(0, 10)
+                                                        });
                                                     }}
                                                 >
                                                     {barPos.width > 60 && (
@@ -1227,46 +1526,196 @@ export default function ProjectFullPlan() {
 
                     </div>
                 </main>
+            </div>
 
-                {/* Notes Popover */}
-                {activeNoteItem && (
-                    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 99 }} onClick={() => setActiveNoteItem(null)}>
-                        <div style={styles.notesPopover} onClick={e => e.stopPropagation()}>
-                            <div style={styles.notesHeader}>
-                                <span>Notlar: {activeNoteItem.action}</span>
-                                <button onClick={() => setActiveNoteItem(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
-                            </div>
-                            <div style={styles.notesBody}>
-                                {notes.length === 0 ? (
-                                    <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', padding: '20px' }}>Henüz not yok.</div>
-                                ) : (
-                                    notes.map(note => (
-                                        <div key={note.id} style={styles.noteItem}>
-                                            <div style={styles.noteMeta}>
-                                                <span style={{ fontWeight: 600 }}>{note.user}</span>
-                                                <span>{new Date(note.created_at).toLocaleString('tr-TR')}</span>
-                                            </div>
-                                            <div style={{ fontSize: '13px', color: 'var(--text)' }}>{note.note}</div>
+            {/* Notes Popover */}
+            {activeNoteItem && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 99 }} onClick={() => setActiveNoteItem(null)}>
+                    <div style={styles.notesPopover} onClick={e => e.stopPropagation()}>
+                        <div style={styles.notesHeader}>
+                            <span>Notlar: {activeNoteItem.action}</span>
+                            <button onClick={() => setActiveNoteItem(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
+                        </div>
+                        <div style={styles.notesBody}>
+                            {notes.length === 0 ? (
+                                <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', padding: '20px' }}>Henüz not yok.</div>
+                            ) : (
+                                notes.map(note => (
+                                    <div key={note.id} style={styles.noteItem}>
+                                        <div style={styles.noteMeta}>
+                                            <span style={{ fontWeight: 600 }}>{note.user}</span>
+                                            <span>{new Date(note.created_at).toLocaleString('tr-TR')}</span>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                            <div style={styles.notesFooter}>
-                                <input
-                                    style={{ ...styles.input, flex: 1 }}
-                                    placeholder="Not yaz..."
-                                    value={newNote}
-                                    onChange={e => setNewNote(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-                                />
-                                <button onClick={handleAddNote} style={styles.btnPrimary}>
-                                    <Send size={14} />
-                                </button>
-                            </div>
+                                        <div style={{ fontSize: '13px', color: 'var(--text)' }}>{note.note}</div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div style={styles.notesFooter}>
+                            <input
+                                style={{ ...styles.input, flex: 1 }}
+                                placeholder="Not yaz..."
+                                value={newNote}
+                                onChange={e => setNewNote(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleAddNote()}
+                            />
+                            <button onClick={handleAddNote} style={styles.btnPrimary}>
+                                <Send size={14} />
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Name Input Modal */}
+            {nameInputModal && nameInputModal.isOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNameInputModal(null)}>
+                    <div style={{ backgroundColor: 'var(--card)', borderRadius: '8px', padding: '24px', width: '320px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>
+                            {nameInputModal.type === 'phase' ? 'Yeni Faz Ekle' : 'Yeni Alt Faz Ekle'}
+                        </h3>
+
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>
+                                {nameInputModal.type === 'phase' ? 'Faz Adı' : 'Alt Faz Adı'}
+                            </label>
+                            <input
+                                style={{ ...styles.input, width: '100%' }}
+                                value={tempName}
+                                onChange={e => setTempName(e.target.value)}
+                                placeholder="İsim giriniz..."
+                                autoFocus
+                                onKeyDown={e => e.key === 'Enter' && handleModalSubmit()}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button
+                                onClick={() => setNameInputModal(null)}
+                                style={{ ...styles.btnSoft, fontSize: '13px' }}
+                            >
+                                İptal
+                            </button>
+                            <button
+                                onClick={handleModalSubmit}
+                                style={{ ...styles.btnPrimary, fontSize: '13px' }}
+                            >
+                                Oluştur
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Date Edit Modal */}
+            {editingDates && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditingDates(null)}>
+                    <div style={{ backgroundColor: 'var(--card)', borderRadius: '8px', padding: '24px', width: '320px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Tarihleri Düzenle</h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Başlangıç Tarihi</label>
+                                <input
+                                    type="date"
+                                    style={{ ...styles.input, width: '100%' }}
+                                    value={editingDates.start}
+                                    onChange={e => setEditingDates({ ...editingDates, start: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Bitiş Tarihi</label>
+                                <input
+                                    type="date"
+                                    style={{ ...styles.input, width: '100%' }}
+                                    value={editingDates.end}
+                                    onChange={e => setEditingDates({ ...editingDates, end: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button
+                                onClick={() => setEditingDates(null)}
+                                style={{ ...styles.btnSoft, fontSize: '13px' }}
+                            >
+                                İptal
+                            </button>
+                            <button
+                                onClick={handleDateSave}
+                                style={{ ...styles.btnPrimary, fontSize: '13px' }}
+                            >
+                                Kaydet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+
     );
 }
+
+// Helper component for recursive sub-phases
+const RecursiveSubPhaseList = ({
+    items,
+    activeSubPhaseId,
+    onSelect,
+    depth = 0
+}: {
+    items: BackendPhaseDetail[],
+    activeSubPhaseId: string | null,
+    onSelect: (id: string) => void,
+    depth?: number
+}) => {
+    if (!items || items.length === 0) return null;
+
+    return (
+        <>
+            {items.map(sub => {
+                const isSubPhase = sub.item_type === 'sub_phase';
+                if (!isSubPhase) return null;
+
+                const isActive = String(sub.id) === String(activeSubPhaseId);
+                const hasChildren = sub.children && sub.children.some(c => c.item_type === 'sub_phase');
+
+                return (
+                    <div key={sub.id}>
+                        <button
+                            onClick={() => onSelect(String(sub.id))}
+                            style={{
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '6px 12px',
+                                paddingLeft: `${12 + (depth * 12)}px`,
+                                fontSize: '13px',
+                                color: isActive ? 'var(--primary)' : 'var(--text)',
+                                backgroundColor: isActive ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                borderRadius: '6px',
+                                marginBottom: '2px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.title}</span>
+                        </button>
+
+                        {/* Recursive call for children */}
+                        {hasChildren && sub.children && (
+                            <RecursiveSubPhaseList
+                                items={sub.children}
+                                activeSubPhaseId={activeSubPhaseId}
+                                onSelect={onSelect}
+                                depth={depth + 1}
+                            />
+                        )}
+                    </div>
+                );
+            })}
+        </>
+    );
+};

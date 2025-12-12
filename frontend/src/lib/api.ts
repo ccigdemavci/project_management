@@ -129,17 +129,39 @@ export type NoteDTO = {
   id: number | string;
   text: string;
   created_at: string;
+  author_name?: string | null;
 };
 export type FileDTO = {
   id: number | string;
   name: string;
   size_kb?: number | null;
+  uploader_name?: string | null;
 };
 export type ExpenseDTO = {
   id: number | string;
   label: string;
   amount: number;
   date: string;
+};
+
+export type ActivityDTO = {
+  id: number;
+  user_id?: number;
+  action: string;
+  details?: string | null;
+  created_at: string;
+};
+export type ResourceDTO = {
+  id: number;
+  label: string;
+  url: string;
+  resource_type: string;
+};
+export type MilestoneDTO = {
+  id: number;
+  title: string;
+  due_date: string;
+  is_completed: boolean;
 };
 
 export type ProjectDetailDTO = {
@@ -162,6 +184,10 @@ export type ProjectDetailDTO = {
   notes?: NoteDTO[];
   files?: FileDTO[];
   expenses?: ExpenseDTO[];
+
+  activities?: ActivityDTO[];
+  resources?: ResourceDTO[];
+  milestones?: MilestoneDTO[];
 };
 
 export type ProjectListItemDTO = {
@@ -184,6 +210,36 @@ export async function getProjectById(
 /** Dashboard listesi için /projects */
 export async function getProjects(): Promise<ProjectListItemDTO[]> {
   return apiGet<ProjectListItemDTO[]>("/projects");
+}
+
+// =====================================
+// EXTRAS (Activity, Resources, Milestones)
+// =====================================
+
+export async function createResource(projectId: string, label: string, url: string, type: string = "link"): Promise<ResourceDTO> {
+  return apiFetch<ResourceDTO>(`/projects/${projectId}/resources`, {
+    method: "POST",
+    body: JSON.stringify({ label, url, resource_type: type })
+  });
+}
+
+export async function deleteResource(projectId: string, resourceId: number): Promise<void> {
+  return apiFetch<void>(`/projects/resources/${resourceId}`, { method: "DELETE" });
+}
+
+export async function createMilestone(projectId: string, title: string, date: string): Promise<MilestoneDTO> {
+  return apiFetch<MilestoneDTO>(`/projects/${projectId}/milestones`, {
+    method: "POST",
+    body: JSON.stringify({ title, due_date: date })
+  });
+}
+
+export async function toggleMilestone(projectId: string, milestoneId: number): Promise<MilestoneDTO> {
+  return apiFetch<MilestoneDTO>(`/projects/milestones/${milestoneId}/toggle`, { method: "PUT" });
+}
+
+export async function deleteMilestone(projectId: string, milestoneId: number): Promise<void> {
+  return apiFetch<void>(`/projects/milestones/${milestoneId}`, { method: "DELETE" });
 }
 
 /* =====================================
@@ -352,3 +408,112 @@ export async function deletePhaseDetail(detailId: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+// --- Project Note Functions ---
+export async function createProjectNote(projectId: string, content: string): Promise<NoteDTO> {
+  // Backend returns ProjectNoteOut which matches NoteDTO structure roughly (id, text, created_at)
+  // Mapping: content -> text
+  const res = await apiFetch<any>(`/projects/${projectId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+  return {
+    id: res.id,
+    text: res.content,
+    created_at: res.created_at,
+  };
+}
+
+export async function deleteProjectNote(projectId: string, noteId: string): Promise<void> {
+  return apiFetch<void>(`/projects/${projectId}/notes/${noteId}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Project File Functions ---
+export async function uploadProjectFile(projectId: string, file: File): Promise<FileDTO> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await apiFetch<any>(`/projects/${projectId}/files`, {
+    method: "POST",
+    body: formData,
+  });
+
+  return {
+    id: res.id,
+    name: res.filename,
+    size_kb: Math.round((res.size_bytes || 0) / 1024),
+  };
+}
+
+export async function deleteProjectFile(projectId: string, fileId: string): Promise<void> {
+  return apiFetch<void>(`/projects/${projectId}/files/${fileId}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Labor Log Functions ---
+export type LaborLog = {
+  id: string; // Backend uses int but we can treat as string locally if needed, but safer to match
+  memberId: string; // user_id
+  memberName: string;
+  hours: number;
+  date: string;
+  cost: number;
+};
+// Helper to map backend labor response to frontend
+export function mapLabor(l: any): LaborLog {
+  return {
+    id: String(l.id),
+    memberId: String(l.user_id),
+    memberName: l.user_name || "Unknown",
+    hours: l.hours,
+    cost: l.cost,
+    date: l.date
+  };
+}
+
+export async function addLaborLog(projectId: string, userId: string, hours: number, date?: string): Promise<LaborLog> {
+  const res = await apiFetch<any>(`/projects/${projectId}/labor-logs`, {
+    method: "POST",
+    body: { user_id: Number(userId), hours, date } as any
+  });
+  return mapLabor(res);
+}
+
+export async function deleteLaborLog(projectId: string, logId: string): Promise<void> {
+  return apiFetch<void>(`/projects/${projectId}/labor-logs/${logId}`, {
+    method: "DELETE"
+  });
+}
+
+// --- Expense Functions ---
+export async function addExpense(projectId: string, label: string, amount: number, date?: string): Promise<ExpenseDTO> {
+  const res = await apiFetch<any>(`/projects/${projectId}/expenses`, {
+    method: "POST",
+    body: { note: label, amount } as any // Mapping label -> note
+  });
+  return {
+    id: String(res.id),
+    label: res.note || "",
+    amount: res.amount,
+    date: res.created_at
+  };
+}
+
+export async function deleteExpense(projectId: string, expenseId: string): Promise<void> {
+  return apiFetch<void>(`/projects/${projectId}/expenses/${expenseId}`, {
+    method: "DELETE"
+  });
+}
+
+// --- Budget Functions ---
+export async function updateProjectBudget(projectId: string, totalBudget: number): Promise<void> {
+  await apiFetch<any>(`/projects/${projectId}/budget`, {
+    method: "PUT",
+    body: { total_budget: totalBudget } as any
+  });
+}
+
+

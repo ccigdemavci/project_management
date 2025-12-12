@@ -235,6 +235,8 @@ export default function PhaseEditor({
         return Math.round((completed / total) * 100);
     }
 
+    const [showTasks, setShowTasks] = useState(false);
+
     return (
         <div className="phase-editor-container">
 
@@ -361,18 +363,40 @@ export default function PhaseEditor({
                     </div>
 
                     <div className="pe-detail-body">
-                        <div className="pe-section-title">Görevler / Alt Başlıklar</div>
-                        <div className="pe-items-list">
-                            {selectedPhase.items.map(item => (
-                                <PhaseItemNode
-                                    key={item.id}
-                                    item={item}
-                                    onUpdate={onUpdateItem}
-                                    onDelete={onDeleteItem}
-                                    onAddSubItem={handleAddSubItem}
-                                />
-                            ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div className="pe-section-title" style={{ marginBottom: 0 }}>Görevler / Alt Başlıklar</div>
+                            <button
+                                className="btn ghost xs"
+                                onClick={() => setShowTasks(!showTasks)}
+                                style={{ gap: 6, color: 'var(--muted)' }}
+                            >
+                                {showTasks ? (
+                                    <>
+                                        <ChevronDown size={14} />
+                                        Gizle
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronRight size={14} />
+                                        Göster ({selectedPhase.items.length})
+                                    </>
+                                )}
+                            </button>
                         </div>
+
+                        {showTasks && (
+                            <div className="pe-items-list">
+                                {selectedPhase.items.map(item => (
+                                    <PhaseItemNode
+                                        key={item.id}
+                                        item={item}
+                                        onUpdate={onUpdateItem}
+                                        onDelete={onDeleteItem}
+                                        onAddSubItem={handleAddSubItem}
+                                    />
+                                ))}
+                            </div>
+                        )}
 
                         <div className="pe-add-row">
                             <select

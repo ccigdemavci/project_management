@@ -1,79 +1,279 @@
-/* Mini Gantt */
+/* Vertical Timeline Style */
 
-.gant {
-    position: relative;
-    height: 36px;
-    background: #0f1319;
-    border: 1px dashed #223;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: inset 0 0 0 1px var(--border);
+/* Wrapper for Toggle + List */
+.gant-wrapper {
+    display: flex;
+    flex-direction: column;
 }
 
-:root[data-theme="light"] .gant {
-    background: #f1f5fb;
-    border-color: #dbe4f0;
-}
-
-.gant-block {
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    border-radius: 10px;
+/* Global Toggle Button */
+.gant-toggle-btn {
     display: flex;
     align-items: center;
-    padding-left: 8px;
-    border: 1px solid rgba(255, 255, 255, .08);
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    background: var(--glass-bg);
+    border: 1px dashed var(--glass-border);
+    border-radius: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 500;
 }
 
-.gant-label {
-    font-size: 11px;
-    color: #cfd6e3;
-    text-shadow: 0 1px 0 rgba(0, 0, 0, .35);
+.gant-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    /* very light hover bg */
+    color: var(--text);
+    border-color: var(--border);
 }
 
-:root[data-theme="light"] .gant-label {
-    color: #334155;
-    text-shadow: none;
+.timeline-list {
+    padding: 16px 0 8px 0;
+    display: flex;
+    flex-direction: column;
+    animation: slideDownList 0.3s ease-out;
+    /* Animate list entry */
 }
 
+@keyframes slideDownList {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
 
-/* faz renkleri (mevcut class isimleri korunuyor) */
-
-.ph-discovery {
-    background: rgba(87, 199, 255, .18);
-    border-color: rgba(87, 199, 255, .35);
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.ph-design {
-    background: rgba(148, 125, 255, .18);
-    border-color: rgba(148, 125, 255, .35);
+/* Timeline Items */
+.timeline-item {
+    display: flex;
+    position: relative;
+    padding-bottom: 24px;
+    /* Space for line */
+    transition: opacity 0.2s;
 }
 
-.ph-dev {
-    background: rgba(85, 212, 167, .20);
-    border-color: rgba(85, 212, 167, .35);
+.timeline-item.clickable {
+    cursor: pointer;
 }
 
-.ph-test {
-    background: rgba(255, 204, 102, .18);
-    border-color: rgba(255, 204, 102, .35);
+.timeline-item.clickable:hover .tl-name {
+    color: var(--primary);
 }
 
-
-/* alternatif isimler de dursun */
-
-.ph-start {
-    background: rgba(87, 199, 255, .18);
-    border-color: rgba(87, 199, 255, .35);
+.timeline-item:last-child {
+    padding-bottom: 0;
 }
 
-.ph-plan {
-    background: rgba(148, 125, 255, .18);
-    border-color: rgba(148, 125, 255, .35);
+/* Marker Column */
+.tl-marker {
+    width: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-right: 16px;
+    position: relative;
 }
 
-.ph-ship {
-    background: rgba(255, 204, 102, .18);
-    border-color: rgba(255, 204, 102, .35);
+.tl-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    z-index: 2;
+    box-shadow: 0 0 0 2px var(--item-bg);
+    /* Ring effect */
+    transition: all 0.2s;
+}
+
+.tl-line {
+    width: 2px;
+    background: var(--border);
+    flex-grow: 1;
+    position: absolute;
+    top: 12px;
+    bottom: -24px;
+    /* Extend to next item */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+}
+
+.timeline-item:last-child .tl-line {
+    display: none;
+}
+
+/* Content Column */
+.tl-content {
+    flex: 1;
+    padding-top: -2px;
+    /* Align text with dot approx */
+}
+
+.tl-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: -4px;
+    /* Fine tune alignment with dot */
+}
+
+.tl-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tl-toggle-icon {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    opacity: 0.7;
+}
+
+.tl-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text);
+    transition: color 0.2s;
+}
+
+.tl-date {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+}
+
+/* Sub Items Container */
+.tl-sub-items {
+    margin-top: 8px;
+    margin-left: 0;
+    /* Aligned with content start */
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    animation: slideDown 0.3s ease-out;
+    position: relative;
+}
+
+/* Connector line from parent content down to items */
+.tl-sub-items::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 15px;
+    /* Stop before last item curve */
+    left: -29px;
+    /* Align with main timeline line */
+    width: 2px;
+    background: var(--border);
+    /* Same as main line */
+    opacity: 0.5;
+    display: none;
+}
+
+/* Better approach: Indent and use L-shape connectors */
+.tl-sub-item {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+    gap: 12px;
+    position: relative;
+    padding: 6px 0 6px 16px;
+    /* Indent */
+    margin-left: -20px;
+    /* Pull back towards the marker */
+    border-left: 2px solid var(--border);
+    /* The vertical line */
+}
+
+.tl-sub-item:last-child {
+    border-image: linear-gradient(to bottom, var(--border) 50%, transparent 50%) 1 100%;
+}
+
+/* Custom dot for sub-item */
+.si-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    position: relative;
+}
+
+/* Horizontal connector from vertical line to dot */
+.tl-sub-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 12px;
+    height: 2px;
+    background: var(--border);
+}
+
+.si-dot.completed {
+    background: var(--success);
+}
+
+.si-text {
+    line-height: 1.4;
+}
+
+.si-text.completed {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Colors matching Phase Editor */
+.tl-dot.ph-discovery {
+    background: #57c7ff;
+    box-shadow: 0 0 0 4px rgba(87, 199, 255, 0.15);
+}
+
+.tl-dot.ph-design {
+    background: #947dff;
+    box-shadow: 0 0 0 4px rgba(148, 125, 255, 0.15);
+}
+
+.tl-dot.ph-dev {
+    background: #55d4a7;
+    box-shadow: 0 0 0 4px rgba(85, 212, 167, 0.15);
+}
+
+.tl-dot.ph-test {
+    background: #ffcc66;
+    box-shadow: 0 0 0 4px rgba(255, 204, 102, 0.15);
+}
+
+/* Completed State */
+.timeline-item.done .tl-name {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.timeline-item.done .tl-dot {
+    filter: grayscale(1);
+    opacity: 0.6;
+    box-shadow: none;
 }

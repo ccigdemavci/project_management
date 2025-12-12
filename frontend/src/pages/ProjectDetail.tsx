@@ -5,6 +5,9 @@ import TeamSection from "@/components/TeamSection";
 import StatusPill, { ProjectStatus } from "@/components/StatusPill";
 import MiniGantt from "@/components/MiniGantt";
 import PhaseEditor, { ExtendedPhase } from "@/components/PhaseEditor";
+import AuditLog from "@/components/AuditLog";
+import ProjectResources from "@/components/ProjectResources";
+import MilestoneTracker from "@/components/MilestoneTracker";
 import {
   CalendarDays,
   Users,
@@ -15,8 +18,11 @@ import {
   Trash2,
   Plus,
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   CheckCircle,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import {
   apiGet,
@@ -31,14 +37,36 @@ import {
   BackendPhase,
   BackendPhaseDetail,
   BackendPhaseDetailUpdate,
+  createProjectNote,
+  uploadProjectFile,
+  addLaborLog,
+  deleteLaborLog,
+  addExpense,
+  deleteExpense,
+  updateProjectBudget,
+  mapLabor,
+  LaborLog, // Import type
+  deleteProjectFile, // and file delete
+
+  // Extras
+  createResource, deleteResource,
+  createMilestone, toggleMilestone, deleteMilestone,
+  ActivityDTO, ResourceDTO, MilestoneDTO, // Types
 } from "@/lib/api";
+
 import { updateProject } from "@/lib/projects"; // Import updateProject
 import { getProfileName } from "@/lib/auth";
 
 /** ---- UI tipleri ---- */
 export type Member = { id: string; name: string; role: string };
-type Note = { id: string; text: string; createdAt: string };
-type Doc = { id: string; name: string; sizeKB: number };
+type Note = { id: string; text: string; createdAt: string; author?: string };
+type Doc = { id: string; name: string; sizeKB: number; uploader?: string };
+
+// ...
+
+
+
+
 type Expense = { id: string; label: string; amount: number; date: string };
 
 export type FullProject = {
@@ -62,6 +90,11 @@ export type FullProject = {
   notes: Note[];
   files: Doc[];
   initExpenses?: Expense[];
+  initLaborLogs?: LaborLog[];
+
+  activities?: ActivityDTO[];
+  resources?: ResourceDTO[];
+  milestones?: MilestoneDTO[];
 };
 
 const MOCK: FullProject[] = [
@@ -137,12 +170,29 @@ type BackendProjectDetail = BackendProject & {
     created_at?: string;
     author_name?: string | null;
   }>;
+  labor_logs?: Array<{
+    id: number;
+    user_id: number;
+    user_name?: string | null;
+    hours: number;
+    cost: number;
+    date: string;
+  }>;
+  total_budget?: number;
+  spent_amount?: number;
+  expenses?: Array<BackendExpense>;
+
+  activities?: ActivityDTO[];
+  resources?: ResourceDTO[];
+  milestones?: MilestoneDTO[];
 };
+
 
 type BackendFile = {
   id: number;
   filename?: string;
   size_bytes?: number | null;
+  uploader_name?: string | null;
 };
 
 type BackendExpense = {
@@ -315,7 +365,10 @@ async function fetchFullProject(id: string): Promise<FullProject> {
     id: String(n.id),
     text: n.content ?? "",
     createdAt: n.created_at ?? "",
+    author: n.author_name ?? "Anonim",
   }));
+
+  // ...
 
   const filesUi: Doc[] = files.map((f) => ({
     id: String(f.id),
@@ -324,17 +377,28 @@ async function fetchFullProject(id: string): Promise<FullProject> {
       1,
       Math.round(((f.size_bytes ?? 0) as number) / 1024) || 1,
     ),
+    uploader: f.uploader_name ?? "Bilinmiyor",
   }));
 
-  const expensesUi: Expense[] = expenses.map((e) => ({
+  const expensesUi: Expense[] = (detail?.expenses ?? expenses).map((e) => ({
     id: String(e.id),
     label: e.note ?? "Harcama",
     amount: Number(e.amount ?? 0),
     date: (e.created_at ?? new Date().toISOString()).slice(0, 10),
   }));
 
-  const planned = Number(budget?.total_budget ?? 0);
-  const spent = Number(budget?.spent_amount ?? 0);
+  const laborLogsUi: LaborLog[] = (detail?.labor_logs ?? []).map((l) => ({
+    id: String(l.id),
+    memberId: String(l.user_id),
+    memberName: l.user_name || "Unknown",
+    hours: l.hours,
+    cost: l.cost,
+    date: l.date.toString().slice(0, 10),
+  }));
+
+  // Prefer detail budget, fallback to separate budget call
+  const planned = Number(detail?.total_budget ?? budget?.total_budget ?? 0);
+  const spent = Number(detail?.spent_amount ?? budget?.spent_amount ?? 0);
 
   const status = normalizeStatus(
     detail?.status ?? base.status ?? "planning",
@@ -363,6 +427,10 @@ async function fetchFullProject(id: string): Promise<FullProject> {
     notes: notesUi,
     files: filesUi,
     initExpenses: expensesUi,
+    initLaborLogs: laborLogsUi,
+    activities: detail?.activities ?? [],
+    resources: detail?.resources ?? [],
+    milestones: detail?.milestones ?? [],
   };
 }
 
@@ -392,11 +460,7 @@ function pickCurrentPhase(phases: ExtendedPhase[], status: ProjectStatus): FullP
 }
 
 function currency(n: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 0,
-  }).format(n);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
 export default function ProjectDetail() {
@@ -411,10 +475,25 @@ export default function ProjectDetail() {
   // Notlar / dosyalar / harcamalar için local state
   const [notes, setNotes] = useState<Note[]>([]);
   const [files, setFiles] = useState<Doc[]>([]);
+
+  const [addingPhase, setAddingPhase] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
+
+  // Budget State
+  const [laborLogs, setLaborLogs] = useState<LaborLog[]>([]);
+  const [plannedBudget, setPlannedBudget] = useState(0);
+
+  // Labor Form State
+  const [laborMemberId, setLaborMemberId] = useState("");
+  const [laborHours, setLaborHours] = useState("");
+  const [laborDate, setLaborDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // General Expenses State
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [addingMember, setAddingMember] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
+
 
   // Harcama form state
   const [exLabel, setExLabel] = useState("");
@@ -439,6 +518,8 @@ export default function ProjectDetail() {
         setNotes(data.notes ?? []);
         setFiles(data.files ?? []);
         setExpenses(data.initExpenses ?? []);
+        setLaborLogs(data.initLaborLogs ?? []); // Initialize labor logs
+        setPlannedBudget(data.budget.planned ?? 0); // Initialize planned budget
       } catch (err: any) {
         console.error("Proje fetch hata:", err);
 
@@ -450,6 +531,8 @@ export default function ProjectDetail() {
         setNotes(fallback.notes);
         setFiles(fallback.files);
         setExpenses(fallback.initExpenses ?? []);
+        setLaborLogs([]); // Fallback for labor logs
+        setPlannedBudget(fallback.budget.planned ?? 0); // Fallback for planned budget
         setLoadError("Backend'ten proje alınamadı, mock veri gösteriliyor.");
       } finally {
         if (active) setLoading(false);
@@ -463,48 +546,114 @@ export default function ProjectDetail() {
   }, [id]);
 
   // Bütçe hesapları
-  const planned = project?.budget.planned ?? 0;
   const spent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const remaining = Math.max(planned - spent, 0);
-  const usedPct = planned > 0 ? Math.min(Math.round((spent / planned) * 100), 100) : 0;
+  // const planned = project?.budget.planned ?? 0; // No longer directly from project
+  // const remaining = Math.max(planned - spent, 0); // Calculated in JSX now
+  // const usedPct = planned > 0 ? Math.min(Math.round((spent / planned) * 100), 100) : 0; // Calculated in JSX now
 
   /** Not ekle */
-  function addNote(text: string) {
-    if (!text.trim()) return;
-    setNotes((prev) => [
-      { id: crypto.randomUUID(), text: text.trim(), createdAt: new Date().toLocaleString() },
-      ...prev,
-    ]);
+  async function addNote(text: string) {
+    if (!text.trim() || !project) return;
+    try {
+      const newNote = await createProjectNote(project.id, text.trim());
+      setNotes((prev) => [
+        {
+          id: String(newNote.id),
+          text: newNote.text,
+          createdAt: new Date(newNote.created_at).toLocaleString(),
+          author: newNote.author_name || currentUserName || "Ben"
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      console.error("Not eklenirken hata:", err);
+      alert("Not eklenemedi.");
+    }
   }
 
-  /** Dosya “yükle” (mock) */
-  function addFiles(list: FileList | null) {
-    if (!list || list.length === 0) return;
-    const next: Doc[] = [];
-    Array.from(list).forEach((f) =>
-      next.push({
-        id: crypto.randomUUID(),
+  /** Dosya “yükle” */
+  async function addFiles(list: FileList | null) {
+    if (!list || list.length === 0 || !project) return;
+
+    // Upload files sequentially or parallel? Parallel is fine.
+    const filesToUpload = Array.from(list);
+
+    try {
+      const uploadedFiles = await Promise.all(
+        filesToUpload.map(f => uploadProjectFile(project.id, f))
+      );
+
+      const next: Doc[] = uploadedFiles.map(f => ({
+        id: String(f.id),
         name: f.name,
-        sizeKB: Math.max(1, Math.round(f.size / 1024)),
-      }),
-    );
-    setFiles((prev) => [...next, ...prev]);
+        sizeKB: f.size_kb || 0,
+        uploader: f.uploader_name || currentUserName || "Ben"
+      }));
+
+      setFiles((prev) => [...next, ...prev]);
+    } catch (err) {
+      console.error("Dosya yüklenirken hata:", err);
+      alert("Dosya yüklenemedi. Lütfen tekrar deneyin.");
+    }
   }
 
-  /** Harcama ekle/sil (mock) */
-  function addExpense() {
+  /** Harcama ekle/sil (API) */
+  async function handleAddExpense() {
     const val = Number(exAmount);
-    if (!exLabel.trim() || !val || val <= 0) return;
-    setExpenses((prev) => [
-      { id: crypto.randomUUID(), label: exLabel.trim(), amount: val, date: exDate },
-      ...prev,
-    ]);
-    setExLabel("");
-    setExAmount("");
+    if (!exLabel.trim() || !val || val <= 0 || !project) return;
+    try {
+      const newEx = await addExpense(project.id, exLabel.trim(), val, exDate);
+      setExpenses((prev) => [
+        { id: String(newEx.id), label: newEx.label, amount: newEx.amount, date: newEx.date },
+        ...prev,
+      ]);
+      setExLabel("");
+      setExAmount("");
+    } catch (err) {
+      console.error("Harcama eklenemedi:", err);
+      alert("Harcama eklenirken hata oluştu.");
+    }
   }
 
-  function removeExpense(id: string) {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  async function handleRemoveExpense(eid: string) {
+    if (!project) return;
+    if (!confirm("Harcamayı silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteExpense(project.id, eid);
+      setExpenses((prev) => prev.filter((e) => e.id !== eid));
+    } catch (err) {
+      console.error("Harcama silinemedi:", err);
+      alert("Silme işlemi başarısız.");
+    }
+  }
+
+  async function handleAddLaborLog() {
+    if (!laborMemberId || !laborHours || !project) return;
+    const member = project.team.find(m => m.id === laborMemberId);
+    if (!member) return;
+
+    try {
+      const hours = Number(laborHours);
+      const newLog = await addLaborLog(project.id, member.id, hours, laborDate);
+      setLaborLogs([...laborLogs, newLog]);
+      setLaborHours("");
+      setLaborMemberId("");
+    } catch (err) {
+      console.error("Efor eklenemedi:", err);
+      alert("Efor eklenirken hata oluştu.");
+    }
+  }
+
+  async function handleRemoveLaborLog(lid: string) {
+    if (!project) return;
+    if (!confirm("Efor kaydını silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteLaborLog(project.id, lid);
+      setLaborLogs((prev) => prev.filter((l) => l.id !== lid));
+    } catch (err) {
+      console.error("Efor silinemedi:", err);
+      alert("Silme işlemi başarısız.");
+    }
   }
 
   async function addMember(emailOverride?: string) {
@@ -852,6 +1001,37 @@ export default function ProjectDetail() {
     }
   }
 
+  // --- Extras Handlers ---
+  const handleAddResource = async (label: string, url: string, type: string) => {
+    if (!project) return;
+    try {
+      await createResource(project.id, label, url, type);
+      setProject(await fetchFullProject(project.id));
+    } catch (err) { console.error(err); }
+  };
+  const handleDeleteResource = async (rid: number) => {
+    if (!project) return;
+    try {
+      await deleteResource(project.id, rid);
+      setProject(await fetchFullProject(project.id));
+    } catch (err) { console.error(err); }
+  };
+  const handleAddMilestone = async (title: string, date: string) => {
+    if (!project) return;
+    await createMilestone(project.id, title, date);
+    setProject(await fetchFullProject(project.id));
+  };
+  const handleToggleMilestone = async (mid: number) => {
+    if (!project) return;
+    await toggleMilestone(project.id, mid);
+    setProject(await fetchFullProject(project.id));
+  };
+  const handleDeleteMilestone = async (mid: number) => {
+    if (!project) return;
+    await deleteMilestone(project.id, mid);
+    setProject(await fetchFullProject(project.id));
+  };
+
   // Yükleniyor durumu
   if (loading && !project) {
     return (
@@ -920,98 +1100,77 @@ export default function ProjectDetail() {
           </button>
 
           <div className="pd-title">
-            <FolderKanban size={22} />
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <h1>{project.name}</h1>
-                <button
-                  className="btn-soft"
-                  style={{
-                    fontSize: "12px",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    backgroundColor:
-                      project.priority === "High" ? "rgba(239, 68, 68, 0.1)" :
-                        project.priority === "Medium" ? "rgba(245, 158, 11, 0.1)" :
-                          "rgba(34, 197, 94, 0.1)",
-                    color:
-                      project.priority === "High" ? "#ef4444" :
-                        project.priority === "Medium" ? "#f59e0b" :
-                          "#22c55e",
-                    border: "none",
-                    cursor: "pointer",
-                    fontWeight: 600
-                  }}
-                  onClick={async () => {
-                    const next =
-                      project.priority === "High" ? "Normal" :
-                        project.priority === "Medium" ? "High" :
-                          "Medium";
-
-                    try {
-                      await updateProject(project.id, { priority: next });
-                      setProject(prev => prev ? { ...prev, priority: next } : prev);
-                    } catch (err) {
-                      console.error("Failed to update priority", err);
-                    }
-                  }}
-                  title="Önceliği değiştirmek için tıklayın"
-                >
-                  {project.priority === "High" ? "🔥 Önemli" :
-                    project.priority === "Medium" ? "⚡ Orta" :
-                      "🟢 Normal"}
-                </button>
-              </div>
-              <div className="pd-sub">
-                <CalendarDays size={16} />
-                <span>
-                  {new Date(project.startDate).toLocaleDateString()} –{" "}
-                  {new Date(project.endDate).toLocaleDateString()}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-0.5px' }}>{project.name}</h1>
+                <span style={{
+                  fontSize: '12px', padding: '4px 10px', borderRadius: '20px', fontWeight: '600',
+                  backgroundColor: project.priority === 'High' ? 'rgba(239, 68, 68, 0.1)' : project.priority === 'Medium' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                  color: project.priority === 'High' ? '#ef4444' : project.priority === 'Medium' ? '#eab308' : '#22c55e',
+                  border: '1px solid currentColor',
+                  opacity: 0.9
+                }}>
+                  {project.priority === "High" ? "Yüksek" : project.priority === "Medium" ? "Orta" : "Normal"}
                 </span>
-                <span className="dot">•</span>
-                <Users size={16} />
-                <span>{project.teamSize} kişi</span>
+              </div>
+
+              <div className="pd-sub" style={{ display: 'flex', gap: '24px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--item-bg)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                  <CalendarDays size={15} className="text-muted" />
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>
+                    {new Date(project.startDate).toLocaleDateString()} — {new Date(project.endDate).toLocaleDateString()}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--item-bg)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                  <Users size={15} className="text-muted" />
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>{project.teamSize} Kişi</span>
+                </div>
               </div>
             </div>
+
           </div>
 
           <div className="pd-head-right">
-            <button
-              className={`btn ${project.status === 'done' ? 'primary' : 'soft'}`}
-              style={{
-                marginRight: '12px',
-                fontSize: '13px',
-                padding: '8px 16px',
-                backgroundColor: project.status === 'done' ? 'var(--primary)' : 'rgba(34, 197, 94, 0.1)',
-                color: project.status === 'done' ? '#fff' : 'var(--success)',
-                border: '1px solid ' + (project.status === 'done' ? 'transparent' : 'rgba(34, 197, 94, 0.2)'),
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s ease',
-                boxShadow: project.status === 'done' ? '0 2px 4px rgba(59, 130, 246, 0.2)' : 'none'
-              }}
-              onClick={handleToggleStatus}
-            >
-              {project.status === 'done' ? (
-                <>
-                  <RotateCcw size={16} />
-                  <span>Projeyi Aktif Et</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle size={16} />
-                  <span>Projeyi Tamamla</span>
-                </>
-              )}
-            </button>
-            <StatusPill status={project.status} />
-            <Link to="/" className="btn ghost">
-              ← Projelere Dön
-            </Link>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                className={`btn ${project.status === 'done' ? 'primary' : 'soft'}`}
+                style={{
+                  marginRight: '12px',
+                  fontSize: '13px',
+                  padding: '8px 16px',
+                  backgroundColor: project.status === 'done' ? 'var(--primary)' : 'rgba(34, 197, 94, 0.1)',
+                  color: project.status === 'done' ? '#fff' : 'var(--success)',
+                  border: '1px solid ' + (project.status === 'done' ? 'transparent' : 'rgba(34, 197, 94, 0.2)'),
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: project.status === 'done' ? '0 2px 4px rgba(59, 130, 246, 0.2)' : 'none'
+                }}
+                onClick={handleToggleStatus}
+              >
+                {project.status === 'done' ? (
+                  <>
+                    <RotateCcw size={16} />
+                    <span>Projeyi Aktif Et</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={16} />
+                    <span>Projeyi Tamamla</span>
+                  </>
+                )}
+              </button>
+
+
+
+              <Link to="/" className="btn ghost">
+                ← Projelere Dön
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -1057,7 +1216,7 @@ export default function ProjectDetail() {
         {/* Detay Butonu */}
         <div style={{ marginTop: 16, marginBottom: 24 }}>
           <button
-            className="btn primary"
+            className="btn primary btn-detail-plan"
             style={{ width: "100%", justifyContent: "center", height: 48, fontSize: 16, fontWeight: 600 }}
             onClick={() => navigate(`/project/${project.id}/plan`)}
           >
@@ -1066,59 +1225,136 @@ export default function ProjectDetail() {
           </button>
         </div>
 
-        {/* KPI’lar */}
-        <section className="pd-kpis kpis-wide">
-          <div className="kpi">
-            <div className="kpi-h">İlerleme</div>
-            <div className="kpi-v">{project.progress}%</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-h">Planlanan</div>
-            <div className="kpi-v">{currency(planned)}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-h">Harcanan</div>
-            <div className="kpi-v">{currency(spent)}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-h">Kalan</div>
-            <div className="kpi-v">{currency(remaining)}</div>
-          </div>
-        </section>
+
+        {/* KPI Section REMOVED based on user request */}
+
 
         {/* 12 kolon layout */}
-        <div className="pd-layout">
+        {/* 12 kolon layout */}
+        <div className="pd-grid">
           {/* Sol ana */}
-          <div className="pd-main">
-            <Card title="Zaman Çizelgesi">
-              <MiniGantt phases={project.phases} />
-              <div className="pd-progress">
-                <div className="progress">
-                  <div className="progress-bar" style={{ width: `${project.progress}%` }} />
+          <div className="pd-col">
+
+            {/* NEW HORIZONTAL TEAM BAR */}
+            <Card title="Proje Ekibi" collapsible={false}>
+              <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  {/* Owner */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    backgroundColor: 'var(--bg-body)', padding: '6px 14px', borderRadius: '50px',
+                    border: '1px solid var(--border)'
+                  }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold'
+                    }}>
+                      <ShieldCheck size={14} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{project.owner}</span>
+                      <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Proje Sahibi</span>
+                    </div>
+                  </div>
+
+                  {/* Team Members */}
+                  {project.team.map(m => (
+                    <div key={m.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      backgroundColor: 'var(--bg-body)', padding: '6px 14px', borderRadius: '50px',
+                      border: '1px solid var(--border)'
+                    }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%', background: 'var(--item-bg)', color: 'var(--text)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '11px'
+                      }}>
+                        {m.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{m.name}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{m.role}</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add Button */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      backgroundColor: 'var(--bg-body)', padding: '4px', paddingLeft: '12px', borderRadius: '50px',
+                      border: '1px dashed var(--border)', marginLeft: '0px'
+                    }}>
+                      <input
+                        placeholder="Kişi ekle..."
+                        style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', width: '100px' }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            addMember(e.currentTarget.value);
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                      />
+                      <button style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--primary)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="progress-text">{project.progress}%</div>
               </div>
+            </Card>
+
+            <Card title="Zaman Çizelgesi">
+              {/* Added a small progress indicator in the card header or just below title could be nice, 
+                  User said "small box". I will put it right inside the card here as a compact row. 
+              */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', background: 'var(--item-bg)', padding: '8px 16px', borderRadius: '12px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>Genel İlerleme</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '60px', height: '6px', background: 'var(--item-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${project.progress}%`, height: '100%', background: 'var(--primary)', borderRadius: '3px' }}></div>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{project.progress}%</span>
+                </div>
+              </div>
+
+              <MiniGantt phases={project.phases} />
             </Card>
 
             {/* Notlar + Dosyalar yan yana */}
             <div className="pd-board">
-              <Card title="Notlar">
+              <Card title="Notlar" collapsible={false}>
                 <NoteEditor onAdd={addNote} />
-                <ul className="note-list">
-                  {notes.map((n) => (
-                    <li key={n.id} className="note-item">
-                      <NotebookText size={16} />
-                      <div>
-                        <div className="note-text">{n.text}</div>
-                        <div className="note-meta">{n.createdAt}</div>
-                      </div>
-                    </li>
-                  ))}
-                  {notes.length === 0 && <div className="empty">Henüz not yok.</div>}
-                </ul>
+                <CollapsibleSubSection title={`Önceki Notlar (${notes.length})`} defaultOpen={false}>
+                  <ul className="note-list">
+                    {notes.length === 0 && <div className="empty">Henüz not yok.</div>}
+                    {notes.map((n) => (
+                      <li key={n.id} className="note-item">
+                        <div className="note-avatar">
+                          {/* Simple avatar or icon */}
+                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "bold" }}>
+                            {(n.author || "A").charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                            <span className="note-author" style={{ fontWeight: 600, fontSize: "13px", color: "var(--text)" }}>
+                              {n.author}
+                            </span>
+                            <span className="note-date" style={{ fontSize: "11px", color: "var(--muted)" }}>
+                              {n.createdAt}
+                            </span>
+                          </div>
+                          <div className="note-text" style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                            {n.text}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleSubSection>
               </Card>
 
-              <Card title="Dosyalar">
+              <Card title="Dosyalar" collapsible={false}>
                 <label className="upload">
                   <Upload size={16} />
                   <span>Dosya ekle</span>
@@ -1129,128 +1365,309 @@ export default function ProjectDetail() {
                   />
                 </label>
 
-                <ul className="files">
-                  {files.map((f) => (
-                    <li key={f.id} className="file-item">
-                      <FileText size={16} />
-                      <span className="file-name">{f.name}</span>
-                      <span className="file-size">{f.sizeKB} KB</span>
-                    </li>
-                  ))}
-                  {files.length === 0 && <div className="empty">Dosya eklenmemiş.</div>}
-                </ul>
+                <CollapsibleSubSection title={`Önceki Dosyalar (${files.length})`} defaultOpen={false}>
+                  <ul className="files">
+                    {files.length === 0 && <div className="empty">Dosya eklenmemiş.</div>}
+                    {files.map((f) => (
+                      <li key={f.id} className="file-item">
+                        <div className="file-icon-area">
+                          <FileText size={20} className="text-primary" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div className="file-name">{f.name}</div>
+                          <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "var(--muted)" }}>
+                            <span>{f.sizeKB} KB</span>
+                            <span>•</span>
+                            <span>{f.uploader}</span>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleSubSection>
               </Card>
+            </div>
+
+            {/* Extras Row (Resources & Milestones) */}
+            <div className="pd-board" style={{ marginTop: '24px' }}>
+              <ProjectResources
+                items={project.resources || []}
+                onAdd={handleAddResource}
+                onDelete={handleDeleteResource}
+              />
+              <MilestoneTracker
+                items={project.milestones || []}
+                onAdd={handleAddMilestone}
+                onToggle={handleToggleMilestone}
+                onDelete={handleDeleteMilestone}
+              />
             </div>
 
           </div>
 
-          {/* Sağ aside: Bütçe + Ekip */}
+
           <aside className="pd-aside sticky">
-            <TeamSection
-              owner={project.owner}
-              team={project.team}
-              onAddMember={(email) => addMember(email)}
-              loading={addingMember}
-            />
 
             <Card title="Bütçe">
+              {/* 1. Overview Cards */}
               <div className="budget-nums">
                 <div className="bn">
                   <div className="bn-h">Planlanan</div>
-                  <div className="bn-v">{currency(planned)}</div>
+                  <div className="bn-v" style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ fontSize: '16px', marginRight: '4px', color: 'var(--muted)' }}>$</span>
+                    <input
+                      value={plannedBudget}
+                      onChange={(e) => setPlannedBudget(Number(e.target.value))}
+                      onBlur={() => {
+                        if (project) updateProjectBudget(project.id, plannedBudget).catch(console.error);
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        borderBottom: '1px dashed var(--border)',
+                        color: 'var(--text)',
+                        fontSize: '24px',
+                        fontWeight: 800,
+                        width: '120px',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="bn">
                   <div className="bn-h">Harcanan</div>
-                  <div className="bn-v">{currency(spent)}</div>
+                  <div className="bn-v">${(spent + laborLogs.reduce((acc, l) => acc + l.cost, 0)).toLocaleString()}</div>
                 </div>
                 <div className="bn">
                   <div className="bn-h">Kalan</div>
-                  <div className="bn-v accent">{currency(remaining)}</div>
+                  <div className="bn-v accent">${(plannedBudget - (spent + laborLogs.reduce((acc, l) => acc + l.cost, 0))).toLocaleString()}</div>
                 </div>
               </div>
 
-              <div className="progress mt" data-pct={usedPct}>
-                <div className="progress-bar gradient" style={{ width: `${usedPct}%` }} />
+              <div className="progress mt" data-pct={(spent + laborLogs.reduce((acc, l) => acc + l.cost, 0)) / plannedBudget * 100} style={{ height: '12px', background: 'var(--item-bg)', borderRadius: '6px', overflow: 'hidden', marginTop: '24px' }}>
+                <div className="progress-bar gradient" style={{ width: `${Math.min(((spent + laborLogs.reduce((acc, l) => acc + l.cost, 0)) / plannedBudget * 100), 100)}%`, height: '100%', background: 'var(--btn-gradient)', borderRadius: '6px', transition: 'width 0.5s ease' }} />
               </div>
+              <div style={{ textAlign: 'right', fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>%{Math.round(((spent + laborLogs.reduce((acc, l) => acc + l.cost, 0)) / plannedBudget * 100) || 0)} Kullanıldı</div>
 
-              <div className="form-inline mt">
-                <div className="fi">
-                  <div className="f-label">Kalem</div>
-                  <input
-                    className="input"
-                    placeholder="örn. Veri etiketleme"
-                    value={exLabel}
-                    onChange={(e) => setExLabel(e.target.value)}
-                  />
-                </div>
-                <div className="fi">
-                  <div className="f-label">Tutar (₺)</div>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    value={exAmount}
-                    onChange={(e) => setExAmount(e.target.value)}
-                  />
-                </div>
-                <div className="fi">
-                  <div className="f-label">Tarih</div>
-                  <input
-                    className="input"
-                    type="date"
-                    value={exDate}
-                    onChange={(e) => setExDate(e.target.value)}
-                  />
-                </div>
-                <button className="btn primary add-btn" onClick={addExpense}>
-                  <Plus size={16} /> Ekle
-                </button>
-              </div>
-
-              <div className="table mt">
-                <div className="table-h">
-                  <div>Kalem</div>
-                  <div>Tarih</div>
-                  <div className="right">Tutar</div>
-                  <div></div>
-                </div>
-                {expenses.length === 0 && (
-                  <div className="empty">Henüz harcama girilmedi.</div>
-                )}
-                {expenses.map((e) => (
-                  <div key={e.id} className="table-r">
-                    <div>{e.label}</div>
-                    <div>{new Date(e.date).toLocaleDateString()}</div>
-                    <div className="right">{currency(e.amount)}</div>
-                    <div className="right">
-                      <button className="icon-btn danger" onClick={() => removeExpense(e.id)}>
-                        <Trash2 size={16} />
-                      </button>
+              {/* 2. Labor Costs Section */}
+              <div style={{ marginTop: '32px' }}>
+                <CollapsibleSubSection title={`Efor Maliyeti ($${laborLogs.reduce((acc, l) => acc + l.cost, 0).toLocaleString()})`} defaultOpen={true}>
+                  <div className="form-inline mt" style={{ gridTemplateColumns: '1fr 1fr auto auto' }}>
+                    <div className="fi">
+                      <div className="f-label">Üye</div>
+                      <select
+                        className="input"
+                        value={laborMemberId}
+                        onChange={(e) => setLaborMemberId(e.target.value)}
+                      >
+                        <option value="">Seçiniz...</option>
+                        {project?.team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
                     </div>
+                    <div className="fi">
+                      <div className="f-label">Saat</div>
+                      <input
+                        className="input"
+                        type="number"
+                        placeholder="örn. 8"
+                        value={laborHours}
+                        onChange={(e) => setLaborHours(e.target.value)}
+                      />
+                    </div>
+                    <div className="fi">
+                      <div className="f-label">Tarih</div>
+                      <input
+                        className="input"
+                        type="date"
+                        value={laborDate}
+                        onChange={(e) => setLaborDate(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      className="btn primary add-btn"
+                      onClick={handleAddLaborLog}
+                      style={{ marginTop: 'auto' }}
+                    >
+                      <Plus size={16} />
+                    </button>
                   </div>
-                ))}
+
+                  <div className="table mt">
+                    <div className="table-h" style={{ gridTemplateColumns: '2fr 1fr 1fr 48px' }}>
+                      <div>Kişi</div>
+                      <div>Saat</div>
+                      <div className="right">Tutar</div>
+                      <div></div>
+                    </div>
+                    {laborLogs.length === 0 && <div className="empty-sm">Henüz efor girilmedi.</div>}
+                    {laborLogs.map(l => (
+                      <div key={l.id} className="table-r" style={{ gridTemplateColumns: '2fr 1fr 1fr 48px' }}>
+                        <div>{l.memberName}</div>
+                        <div>{l.hours} sa</div>
+                        <div className="right">${Number(l.cost).toLocaleString()}</div>
+                        <div className="right">
+                          <button className="icon-btn danger" onClick={() => handleRemoveLaborLog(l.id)}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleSubSection>
+              </div>
+
+              {/* 3. General Expenses Section */}
+              <div style={{ marginTop: '24px' }}>
+                <CollapsibleSubSection title={`Ekstra Giderler ($${spent.toLocaleString()})`} defaultOpen={false}>
+                  <div className="form-inline mt">
+                    <div className="fi">
+                      <div className="f-label">Kalem</div>
+                      <input
+                        className="input"
+                        value={exLabel}
+                        onChange={(e) => setExLabel(e.target.value)}
+                      />
+                    </div>
+                    <div className="fi">
+                      <div className="f-label">Tutar</div>
+                      <input
+                        className="input"
+                        type="number"
+                        min={0}
+                        value={exAmount}
+                        onChange={(e) => setExAmount(e.target.value)}
+                      />
+                    </div>
+                    <div className="fi">
+                      <div className="f-label">Tarih</div>
+                      <input
+                        className="input"
+                        type="date"
+                        value={exDate}
+                        onChange={(e) => setExDate(e.target.value)}
+                      />
+                    </div>
+                    <button className="btn primary add-btn" onClick={handleAddExpense} style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center' }}>
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  <div className="table mt">
+                    <div className="table-h">
+                      <div>Kalem</div>
+                      <div>Tarih</div>
+                      <div className="right">Tutar</div>
+                      <div></div>
+                    </div>
+                    {expenses.length === 0 && (
+                      <div className="empty-sm">Henüz harcama girilmedi.</div>
+                    )}
+                    {expenses.map((e) => (
+                      <div key={e.id} className="table-r">
+                        <div>{e.label}</div>
+                        <div>{new Date(e.date).toLocaleDateString()}</div>
+                        <div className="right">{currency(e.amount)}</div>
+                        <div className="right">
+                          <button className="icon-btn danger" onClick={() => handleRemoveExpense(e.id)}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleSubSection>
               </div>
             </Card>
           </aside>
         </div>
       </div>
+
+
     </>
   );
 }
 
 /** ----------------- Küçük yardımcı bileşenler ----------------- */
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+
+
+// ...
+
+
+function Card({
+  title,
+  children,
+  collapsible = false,
+  defaultOpen = true
+}: {
+  title: string;
+  children: React.ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  // If not collapsible, always open
+  const showContent = !collapsible || isOpen;
+
   return (
     <div className="pc">
-      <div className="pc-h">
+      <div
+        className="pc-h"
+        onClick={() => collapsible && setIsOpen(!isOpen)}
+        style={{
+          cursor: collapsible ? "pointer" : "default",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}
+      >
         <div className="pc-title">
           <span>{title}</span>
         </div>
+        {collapsible && (
+          <div style={{ color: "var(--muted)" }}>
+            {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </div>
+        )}
       </div>
-      {children}
+      {showContent && children}
     </div>
   );
+}
+
+function CollapsibleSubSection({
+  title,
+  children,
+  defaultOpen = false
+}: {
+  title: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          cursor: 'pointer',
+          fontSize: '13px',
+          fontWeight: 600,
+          color: 'var(--muted)',
+          marginBottom: 8,
+          userSelect: 'none'
+        }}
+      >
+        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <span>{title}</span>
+      </div>
+      {isOpen && children}
+    </div>
+  )
 }
 
 function NoteEditor({ onAdd }: { onAdd: (text: string) => void }) {
